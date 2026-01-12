@@ -79,44 +79,82 @@ jobs:
     steps:
       - name: Write install commands to summary
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🚀 Credential Provider Build Complete!
 
-          Download artifacts from this workflow run, or use curl after creating a release.
+          ### Download Run Artifacts (this build)
 
-          ### Install Commands
+          Use the GitHub CLI to download artifacts from this workflow run:
+
+          \`\`\`bash
+          # Install GitHub CLI if needed: https://cli.github.com/
+
+          # Linux (x64):
+          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-linux -R ${{ github.repository }} \
+            && tar xzf credentialprovider-azureartifacts-linux.tar.gz -C /tmp/cred-provider \
+            && /tmp/cred-provider/install.sh \
+            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-linux.tar.gz
+
+          # Linux (ARM64):
+          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-linux-arm64 -R ${{ github.repository }} \
+            && tar xzf credentialprovider-azureartifacts-linux-arm64.tar.gz -C /tmp/cred-provider \
+            && /tmp/cred-provider/install.sh \
+            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-linux-arm64.tar.gz
+
+          # macOS (Intel):
+          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-osx -R ${{ github.repository }} \
+            && tar xzf credentialprovider-azureartifacts-osx.tar.gz -C /tmp/cred-provider \
+            && /tmp/cred-provider/install.sh \
+            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-osx.tar.gz
+
+          # macOS (Apple Silicon):
+          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-osx-arm64 -R ${{ github.repository }} \
+            && tar xzf credentialprovider-azureartifacts-osx-arm64.tar.gz -C /tmp/cred-provider \
+            && /tmp/cred-provider/install.sh \
+            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-osx-arm64.tar.gz
+          \`\`\`
+
+          ---
+
+          ### Download Release Artifacts (after creating a release)
+
+          Use curl to download from a published release:
 
           **Linux (x64):**
-          ```bash
+          \`\`\`bash
           mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux.tar.gz | tar xz -C /tmp/cred-provider \
+            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux.tar.gz \
+            | tar xz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
             && rm -rf /tmp/cred-provider
-          ```
+          \`\`\`
 
           **Linux (ARM64):**
-          ```bash
+          \`\`\`bash
           mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux-arm64.tar.gz | tar xz -C /tmp/cred-provider \
+            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux-arm64.tar.gz \
+            | tar xz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
             && rm -rf /tmp/cred-provider
-          ```
+          \`\`\`
 
           **macOS (Intel):**
-          ```bash
+          \`\`\`bash
           mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx.tar.gz | tar xz -C /tmp/cred-provider \
+            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx.tar.gz \
+            | tar xz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
             && rm -rf /tmp/cred-provider
-          ```
+          \`\`\`
 
           **macOS (Apple Silicon):**
-          ```bash
+          \`\`\`bash
           mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx-arm64.tar.gz | tar xz -C /tmp/cred-provider \
+            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx-arm64.tar.gz \
+            | tar xz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
             && rm -rf /tmp/cred-provider
-          ```
+          \`\`\`
           EOF
   release:
     needs: build
@@ -147,7 +185,8 @@ jobs:
             **Linux (x64):**
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux.tar.gz | tar xz -C /tmp/cred-provider \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux.tar.gz \
+              | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
             ```
@@ -155,7 +194,8 @@ jobs:
             **Linux (ARM64):**
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux-arm64.tar.gz | tar xz -C /tmp/cred-provider \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux-arm64.tar.gz \
+              | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
             ```
@@ -163,7 +203,8 @@ jobs:
             **macOS (Intel):**
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx.tar.gz | tar xz -C /tmp/cred-provider \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx.tar.gz \
+              | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
             ```
@@ -171,7 +212,8 @@ jobs:
             **macOS (Apple Silicon):**
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx-arm64.tar.gz | tar xz -C /tmp/cred-provider \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx-arm64.tar.gz \
+              | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
             ```
