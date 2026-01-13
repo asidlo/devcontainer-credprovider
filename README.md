@@ -109,36 +109,6 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 }
 ```
 
-## Alternative: Manual Devcontainer Integration
-
-If you prefer a script-based approach, add this to your `.devcontainer/devcontainer.json`:
-
-```json
-{
-  "postCreateCommand": "bash .devcontainer/scripts/setup-nuget.sh"
-}
-```
-
-Create `.devcontainer/scripts/setup-nuget.sh`:
-
-```bash
-#!/bin/bash
-# Install GitHub CLI if not present (or use curl for public repos)
-if command -v gh &> /dev/null; then
-  gh release download -R asidlo/credentialprovider-azureartifacts -p "*.tar.gz" \
-    && mkdir -p /tmp/cred-provider \
-    && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
-    && /tmp/cred-provider/install.sh \
-    && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
-else
-  echo "GitHub CLI not found. Install from https://cli.github.com/"
-  exit 1
-fi
-
-# Now restore works automatically
-dotnet restore
-```
-
 ## Troubleshooting
 
 ### Check if provider is installed
