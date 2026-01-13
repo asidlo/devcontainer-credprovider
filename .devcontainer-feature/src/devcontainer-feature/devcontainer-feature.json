@@ -6,7 +6,9 @@
   "description": "Installs a silent/headless NuGet credential provider for Azure Artifacts that authenticates without interactive prompts.",
   "options": {},
   "installsAfter": [
-    "ghcr.io/devcontainers/features/dotnet"
+    "ghcr.io/devcontainers/features/dotnet",
+    "ghcr.io/devcontainers/features/azure-cli",
+    "ghcr.io/microsoft/codespace-features/artifacts-helper"
   ],
   "containerEnv": {},
   "customizations": {
