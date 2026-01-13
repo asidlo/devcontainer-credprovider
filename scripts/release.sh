@@ -133,6 +133,7 @@ echo ""
 read -p "Create tag $NEW_TAG and push to trigger release? [y/N]: " CONFIRM
 if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     echo -e "${YELLOW}Aborted.${NC}"
+# Confirm
     exit 0
 fi
 
@@ -142,7 +143,18 @@ echo -e "${YELLOW}Creating tag $NEW_TAG...${NC}"
 git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
 
 echo -e "${YELLOW}Pushing tag to origin...${NC}"
-git push origin "$NEW_TAG"
+if git config --get user.signingkey >/dev/null 2>&1 || git config --get gpg.format >/dev/null 2>&1; then
+    if git tag -s "$NEW_TAG" -m "Release $NEW_TAG" 2>/dev/null; then
+        echo -e "${GREEN}✓ Created signed tag${NC}"
+    else
+        echo -e "${YELLOW}Warning: Tag signing failed; creating unsigned annotated tag instead.${NC}"
+        git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+    fi
+else
+    echo -e "${YELLOW}Note: No signing key configured; creating unsigned annotated tag.${NC}"
+    echo -e "${YELLOW}Tip: Configure tag signing with 'git config --global user.signingkey <KEY>' and 'git config --global tag.gpgSign true'.${NC}"
+    git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+fi
 
 echo ""
 echo -e "${GREEN}✓ Tag $NEW_TAG created and pushed!${NC}"

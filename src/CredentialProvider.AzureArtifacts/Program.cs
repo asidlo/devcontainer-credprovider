@@ -73,14 +73,13 @@ public static class Program
     private static async Task<int> TestCredentialsAsync()
     {
         Console.WriteLine($"CredentialProvider.AzureArtifacts v{GetVersion()}");
-        Console.WriteLine("Testing credential acquisition...");;
+        Console.WriteLine("Testing credential acquisition...");
 
         var token = await TryGetAccessTokenAsync("https://pkgs.dev.azure.com/test/");
 
         if (!string.IsNullOrEmpty(token))
         {
             Console.WriteLine($"✓ Successfully acquired token (length: {token.Length})");
-            Console.WriteLine($"  Token prefix: {token[..Math.Min(20, token.Length)]}...");
             return 0;
         }
 

@@ -12,6 +12,10 @@ on:
         default: true
         type: boolean
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest

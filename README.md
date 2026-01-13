@@ -56,6 +56,28 @@ dotnet ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProv
 dotnet ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll --test
 ```
 
+## Release Verification
+
+Each GitHub release includes:
+
+- `checksums.sha256` (SHA-256 of the `.tar.gz` and `.zip`)
+- Sigstore (cosign) signatures: `*.sig` and certificates: `*.cert`
+
+Verify checksums:
+
+```bash
+sha256sum -c checksums.sha256
+```
+
+Verify Sigstore signatures (requires `cosign`):
+
+```bash
+cosign verify-blob \
+  --signature credentialprovider-azureartifacts.tar.gz.sig \
+  --certificate credentialprovider-azureartifacts.tar.gz.cert \
+  credentialprovider-azureartifacts.tar.gz
+```
+
 ## Building from Source
 
 ```bash
@@ -159,3 +181,11 @@ rm -rf ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts
 ## License
 
 MIT - See [LICENSE](LICENSE)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+Please report security issues privately. See [SECURITY.md](SECURITY.md).

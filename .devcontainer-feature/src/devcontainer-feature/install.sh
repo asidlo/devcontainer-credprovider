@@ -73,34 +73,12 @@ else
     exit 1
 fi
 
-# Configure NuGet to use non-interactive mode
-# This prevents C# DevKit from falling back to device code flow
-NUGET_CONFIG_DIR="$USER_HOME/.nuget/NuGet"
-NUGET_CONFIG="$NUGET_CONFIG_DIR/NuGet.Config"
+# Configure environment so NuGet (and C# DevKit) can find the plugin.
+#
+# Note: This feature intentionally does NOT modify user NuGet.Config, to avoid
+# weakening signature validation or overriding user preferences.
 
-mkdir -p "$NUGET_CONFIG_DIR"
-
-# Create or update NuGet.Config to disable interactive auth
-if [ ! -f "$NUGET_CONFIG" ]; then
-    echo "Creating NuGet.Config with non-interactive settings..."
-    cat >"$NUGET_CONFIG" <<'NUGETCONFIG'
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <config>
-    <!-- Disable interactive authentication prompts -->
-    <!-- Forces NuGet to use credential providers instead of device code flow -->
-    <add key="signatureValidationMode" value="accept" />
-  </config>
-  <packageSourceCredentials>
-    <!-- Credential providers will handle authentication -->
-  </packageSourceCredentials>
-</configuration>
-NUGETCONFIG
-fi
-
-chown -R "$TARGET_USER:$TARGET_USER" "$NUGET_CONFIG_DIR" 2>/dev/null || true
-
-# Set environment variable to force non-interactive mode
+# Set environment variables for NuGet plugin behavior
 # This affects both CLI and C# DevKit
 PROFILE_SCRIPT="/etc/profile.d/nuget-credprovider.sh"
 
