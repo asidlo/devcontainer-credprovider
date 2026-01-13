@@ -38,11 +38,17 @@ jobs:
         run: npm install -g @devcontainers/cli
 
       - name: Build credential provider
+        id: build
         run: |
           dotnet restore src/CredentialProvider.AzureArtifacts
           dotnet publish src/CredentialProvider.AzureArtifacts \
             -c Release \
             -o ./publish/netcore
+          
+          # Extract version from the built assembly (set by MinVer)
+          VERSION=$(dotnet ./publish/netcore/CredentialProvider.AzureArtifacts.dll --version | awk '{print $2}' | cut -d'+' -f1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Credential Provider Version: $VERSION"
 
       - name: Embed binaries in feature
         run: |
@@ -53,7 +59,20 @@ jobs:
           # Copy the built credential provider binaries
           cp -r ./publish/netcore/* "$FEATURE_DIR/netcore/"
           
+          # Update feature version to match credential provider version
+          VERSION="${{ steps.build.outputs.version }}"
+          echo "📦 Setting feature version to: $VERSION"
+          
+          # Use jq to update the version in devcontainer-feature.json
+          jq --arg v "$VERSION" '.version = $v' "$FEATURE_DIR/devcontainer-feature.json" > "$FEATURE_DIR/devcontainer-feature.json.tmp"
+          mv "$FEATURE_DIR/devcontainer-feature.json.tmp" "$FEATURE_DIR/devcontainer-feature.json"
+          
+          # Show the updated feature config
+          echo "📄 Updated devcontainer-feature.json:"
+          cat "$FEATURE_DIR/devcontainer-feature.json"
+          
           # Show what's being embedded
+          echo ""
           echo "📦 Embedded binaries:"
           ls -la "$FEATURE_DIR/netcore/"
 
@@ -76,7 +95,10 @@ jobs:
 
       - name: Summary
         run: |
+          VERSION="${{ steps.build.outputs.version }}"
           echo "## 📦 Devcontainer Feature Published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The feature is now available at:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -84,6 +106,16 @@ jobs:
           echo "{" >> $GITHUB_STEP_SUMMARY
           echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
           echo "    \"ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1\": {}" >> $GITHUB_STEP_SUMMARY
+          echo "  }" >> $GITHUB_STEP_SUMMARY
+          echo "}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Or pin to this specific version:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          echo "{" >> $GITHUB_STEP_SUMMARY
+          echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
+          echo "    \"ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:$VERSION\": {}" >> $GITHUB_STEP_SUMMARY
           echo "  }" >> $GITHUB_STEP_SUMMARY
           echo "}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
