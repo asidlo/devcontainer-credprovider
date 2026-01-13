@@ -8,7 +8,7 @@ set -e
 
 echo "Installing Azure Artifacts Credential Provider..."
 
-# Determine the user's home directory
+# Determine the user's home directory and username
 if [ -n "$_REMOTE_USER_HOME" ]; then
     USER_HOME="$_REMOTE_USER_HOME"
 elif [ -n "$_CONTAINER_USER_HOME" ]; then
@@ -16,6 +16,9 @@ elif [ -n "$_CONTAINER_USER_HOME" ]; then
 else
     USER_HOME="${HOME:-/root}"
 fi
+
+# Get the target user for ownership
+TARGET_USER="${_REMOTE_USER:-${_CONTAINER_USER:-root}}"
 
 PLUGIN_DEST="$USER_HOME/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts"
 
@@ -31,6 +34,9 @@ if [ -d "$EMBEDDED_DIR" ] && [ -f "$EMBEDDED_DIR/CredentialProvider.AzureArtifac
     # This allows other features (like Microsoft's artifacts-helper) to also install credential providers
     PLUGINS_DIR="$USER_HOME/.nuget/plugins/netcore"
     mkdir -p "$PLUGINS_DIR"
+    
+    # Set ownership to target user so other features can write to this directory
+    chown -R "$TARGET_USER:$TARGET_USER" "$USER_HOME/.nuget" 2>/dev/null || true
     chmod 755 "$USER_HOME/.nuget" 2>/dev/null || true
     chmod 755 "$USER_HOME/.nuget/plugins" 2>/dev/null || true
     chmod 755 "$PLUGINS_DIR" 2>/dev/null || true
@@ -40,6 +46,9 @@ if [ -d "$EMBEDDED_DIR" ] && [ -f "$EMBEDDED_DIR/CredentialProvider.AzureArtifac
     
     # Copy embedded binaries
     cp -r "$EMBEDDED_DIR"/* "$PLUGIN_DEST/"
+    
+    # Ensure target user owns everything
+    chown -R "$TARGET_USER:$TARGET_USER" "$USER_HOME/.nuget" 2>/dev/null || true
     
     echo "Installed embedded binaries to $PLUGIN_DEST"
 else
