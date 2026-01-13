@@ -90,20 +90,6 @@ jobs:
             && /tmp/cred-provider/install.sh \
             && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
           \`\`\`
-
-          ---
-
-          ### Download Release Artifacts (after creating a release)
-
-          Use curl to download from a published release:
-
-          \`\`\`bash
-          mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts.tar.gz \
-            | tar xz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider
-          \`\`\`
           EOF
   release:
     needs: build
@@ -138,7 +124,7 @@ jobs:
 
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts.tar.gz \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/credentialprovider-azureartifacts.tar.gz \
               | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
@@ -147,7 +133,7 @@ jobs:
             ### Install (Windows PowerShell)
 
             ```powershell
-            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts.zip" -OutFile "$env:TEMP\cred-provider.zip"
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/credentialprovider-azureartifacts.zip" -OutFile "$env:TEMP\cred-provider.zip"
             Expand-Archive -Path "$env:TEMP\cred-provider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
             & "$env:TEMP\cred-provider\install.ps1"
             Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "$env:TEMP\cred-provider.zip"
