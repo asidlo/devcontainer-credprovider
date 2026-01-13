@@ -179,9 +179,10 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Trigger devcontainer feature publish
-        run: |
-          echo "🐳 Triggering devcontainer feature publish workflow..."
-          gh workflow run publish-feature.yml -R ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Publish the devcontainer feature after creating a release
+  publish-feature:
+    needs: release
+    uses: ./.github/workflows/publish-feature.yml
+    permissions:
+      contents: read
+      packages: write
