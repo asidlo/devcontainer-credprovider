@@ -12,11 +12,51 @@ on:
         default: false
         type: boolean
       version:
-        description: "Version for release (e.g., 1.0.0)"
+        description: "Version for release (check job summary for current latest)"
         required: false
         default: "1.0.0"
         type: string
 jobs:
+  check_version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get latest release info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "## 📦 Version Information" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Try to get the latest release
+          LATEST=$(gh release view --repo ${{ github.repository }} --json tagName,publishedAt --jq '.tagName + " (" + .publishedAt[0:10] + ")"' 2>/dev/null || echo "none")
+          
+          if [ "$LATEST" = "none" ]; then
+            echo "**Current latest release:** No releases yet" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Suggested first version: \`1.0.0\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Current latest release:** \`$LATEST\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Extract just the version number for suggestions
+            CURRENT_VERSION=$(echo "$LATEST" | sed 's/^v//' | cut -d' ' -f1)
+            MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+            MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+            PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
+            
+            echo "**Suggested next versions:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Patch: \`$MAJOR.$MINOR.$((PATCH + 1))\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Minor: \`$MAJOR.$((MINOR + 1)).0\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Major: \`$((MAJOR + 1)).0.0\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "🚀 **Creating release:** \`v${{ github.event.inputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ *To create a release, re-run with 'Create a GitHub release' checked*" >> $GITHUB_STEP_SUMMARY
+          fi
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -98,6 +138,21 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Show release info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "## 🚀 Creating Release" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          LATEST=$(gh release view --repo ${{ github.repository }} --json tagName --jq '.tagName' 2>/dev/null || echo "none")
+          
+          if [ "$LATEST" = "none" ]; then
+            echo "**Previous release:** None (this is the first release!)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Previous release:** \`$LATEST\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "**New release:** \`v${{ github.event.inputs.version }}\`" >> $GITHUB_STEP_SUMMARY
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
