@@ -102,6 +102,7 @@ public static class Program
             requestHandlers.TryAdd(MessageMethod.GetOperationClaims, new GetOperationClaimsRequestHandler());
             requestHandlers.TryAdd(MessageMethod.SetLogLevel, new SetLogLevelRequestHandler());
             requestHandlers.TryAdd(MessageMethod.Initialize, new InitializeRequestHandler());
+            requestHandlers.TryAdd(MessageMethod.Close, new CloseRequestHandler());
 
             // Use default connection options
             var options = ConnectionOptions.CreateDefault();
@@ -119,7 +120,7 @@ public static class Program
                 cts.Cancel();
             };
 
-            var plugin = await PluginFactory.CreateFromCurrentProcessAsync(
+            using var plugin = await PluginFactory.CreateFromCurrentProcessAsync(
                 requestHandlers,
                 options,
                 cts.Token);
@@ -154,6 +155,8 @@ public static class Program
             }
 
             Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin shutting down...");
+            
+            // Dispose is handled by 'using' statement above
 
             return 0;
         }
@@ -164,7 +167,7 @@ public static class Program
         }
     }
 
-    internal static async Task<string?> TryGetAccessTokenAsync(string packageSourceUri)
+    internal static async Task<string?> TryGetAccessTokenAsync(string packageSourceUri, CancellationToken cancellationToken = default)
     {
         // 1. Check environment variable first
         var envToken = Environment.GetEnvironmentVariable("VSS_NUGET_ACCESSTOKEN");
@@ -175,7 +178,7 @@ public static class Program
         }
 
         // 2. Try auth helpers (devcontainer scenario)
-        var helperToken = await TryGetTokenFromAuthHelperAsync();
+        var helperToken = await TryGetTokenFromAuthHelperAsync(cancellationToken);
         if (!string.IsNullOrEmpty(helperToken))
         {
             Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Acquired token via auth helper");
@@ -183,7 +186,7 @@ public static class Program
         }
 
         // 3. Try Azure.Identity (DefaultAzureCredential)
-        var identityToken = await TryGetTokenFromAzureIdentityAsync();
+        var identityToken = await TryGetTokenFromAzureIdentityAsync(cancellationToken);
         if (!string.IsNullOrEmpty(identityToken))
         {
             Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Acquired token via Azure.Identity");
@@ -193,7 +196,7 @@ public static class Program
         return null;
     }
 
-    private static async Task<string?> TryGetTokenFromAuthHelperAsync()
+    private static async Task<string?> TryGetTokenFromAuthHelperAsync(CancellationToken cancellationToken = default)
     {
         foreach (var helperPath in AuthHelperPaths)
         {
@@ -221,18 +224,29 @@ public static class Program
 
                 process.Start();
 
-                var tokenTask = process.StandardOutput.ReadToEndAsync();
-                var waitTask = Task.Run(() => process.WaitForExit(10000));
+                // Use a timeout with cancellation support
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
 
-                await Task.WhenAny(waitTask, Task.Delay(10000));
-
-                if (process.HasExited && process.ExitCode == 0)
+                try
                 {
-                    var token = (await tokenTask).Trim();
-                    if (!string.IsNullOrEmpty(token) && !token.StartsWith("Error", StringComparison.OrdinalIgnoreCase))
+                    var token = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                    await process.WaitForExitAsync(timeoutCts.Token);
+
+                    if (process.ExitCode == 0)
                     {
-                        return token;
+                        token = token.Trim();
+                        if (!string.IsNullOrEmpty(token) && !token.StartsWith("Error", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return token;
+                        }
                     }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Timeout - kill the process
+                    Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper timed out: {helperPath}");
+                    try { process.Kill(entireProcessTree: true); } catch { }
                 }
             }
             catch (Exception ex)
@@ -244,7 +258,7 @@ public static class Program
         return null;
     }
 
-    private static async Task<string?> TryGetTokenFromAzureIdentityAsync()
+    private static async Task<string?> TryGetTokenFromAzureIdentityAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -258,10 +272,18 @@ public static class Program
 
             var tokenRequest = new TokenRequestContext([AzureDevOpsScope]);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var token = await credential.GetTokenAsync(tokenRequest, cts.Token);
+            // Use linked token with timeout
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+            
+            var token = await credential.GetTokenAsync(tokenRequest, timeoutCts.Token);
 
             return token.Token;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Azure.Identity timed out");
+            return null;
         }
         catch (Exception ex)
         {
@@ -361,7 +383,8 @@ internal sealed class GetAuthenticationCredentialsRequestHandler : IRequestHandl
             return;
         }
 
-        var token = await Program.TryGetAccessTokenAsync(uri);
+        // Pass cancellation token to token acquisition
+        var token = await Program.TryGetAccessTokenAsync(uri, cancellationToken);
 
         if (string.IsNullOrEmpty(token))
         {
@@ -436,5 +459,26 @@ internal sealed class InitializeRequestHandler : IRequestHandler
 
         var response = new InitializeResponse(MessageResponseCode.Success);
         return responseHandler.SendResponseAsync(request, response, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Handles Close requests - called by NuGet when shutting down the plugin
+/// </summary>
+internal sealed class CloseRequestHandler : IRequestHandler
+{
+    public CancellationToken CancellationToken => CancellationToken.None;
+
+    public Task HandleResponseAsync(
+        IConnection connection,
+        Message request,
+        IResponseHandler responseHandler,
+        CancellationToken cancellationToken)
+    {
+        Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Close request received");
+
+        // Acknowledge the close request
+        // The plugin will exit after responding
+        return Task.CompletedTask;
     }
 }
