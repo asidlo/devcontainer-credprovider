@@ -16,6 +16,23 @@ Add this feature to your `devcontainer.json`:
 
 No additional options or authentication required - the credential provider binaries are embedded in the feature package.
 
+## C# DevKit Integration
+
+For C# DevKit to use this credential provider instead of device code flow, add the following to your `devcontainer.json`:
+
+```json
+{
+  "features": {
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
+  },
+  "remoteEnv": {
+    "NUGET_PLUGIN_PATHS": "${containerEnv:HOME}/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll"
+  }
+}
+```
+
+This explicitly tells NuGet (and C# DevKit's Roslyn language server) where to find the credential provider.
+
 ## Requirements
 
 - **.NET 8 Runtime** - Required to run the credential provider. Consider adding the dotnet feature:
@@ -33,7 +50,8 @@ No additional options or authentication required - the credential provider binar
 
 1. Copies the embedded credential provider binaries
 2. Installs to `~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/`
-3. Verifies the installation
+3. Configures NuGet environment variables for non-interactive authentication
+4. Verifies the installation
 
 After installation, `dotnet restore` will automatically use this credential provider for Azure Artifacts feeds.
 

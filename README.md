@@ -117,6 +117,20 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 ls -la ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/
 ```
 
+### C# DevKit Integration
+
+If C# DevKit is prompting for device code authentication instead of using the credential provider, add this to your devcontainer.json:
+
+```json
+{
+  "remoteEnv": {
+    "NUGET_PLUGIN_PATHS": "${containerEnv:HOME}/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll"
+  }
+}
+```
+
+This explicitly tells NuGet (and C# DevKit) to use this credential provider.
+
 ### Enable verbose NuGet logging
 
 ```bash

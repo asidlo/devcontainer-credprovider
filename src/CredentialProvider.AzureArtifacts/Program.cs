@@ -198,6 +198,10 @@ public static class Program
 
     private static async Task<string?> TryGetTokenFromAuthHelperAsync(CancellationToken cancellationToken = default)
     {
+        // Retry settings - auth helpers may take time to initialize after container start
+        const int maxRetries = 3;
+        const int retryDelayMs = 2000;
+
         foreach (var helperPath in AuthHelperPaths)
         {
             if (!File.Exists(helperPath))
@@ -205,53 +209,75 @@ public static class Program
                 continue;
             }
 
-            try
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Trying auth helper: {helperPath}");
-
-                using var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = helperPath,
-                        Arguments = "get-access-token",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-
-                // Use a timeout with cancellation support
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
-
                 try
                 {
-                    var token = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                    await process.WaitForExitAsync(timeoutCts.Token);
+                    Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Trying auth helper: {helperPath} (attempt {attempt}/{maxRetries})");
 
-                    if (process.ExitCode == 0)
+                    using var process = new Process
                     {
-                        token = token.Trim();
-                        if (!string.IsNullOrEmpty(token) && !token.StartsWith("Error", StringComparison.OrdinalIgnoreCase))
+                        StartInfo = new ProcessStartInfo
                         {
-                            return token;
+                            FileName = helperPath,
+                            Arguments = "get-access-token",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        }
+                    };
+
+                    process.Start();
+
+                    // Use a timeout with cancellation support
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+                    try
+                    {
+                        var token = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                        await process.WaitForExitAsync(timeoutCts.Token);
+
+                        if (process.ExitCode == 0)
+                        {
+                            token = token.Trim();
+                            if (!string.IsNullOrEmpty(token) && !token.StartsWith("Error", StringComparison.OrdinalIgnoreCase))
+                            {
+                                return token;
+                            }
+                        }
+
+                        // Token was empty or invalid - retry if we have attempts left
+                        if (attempt < maxRetries)
+                        {
+                            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper returned no token, retrying in {retryDelayMs}ms...");
+                            await Task.Delay(retryDelayMs, cancellationToken);
+                        }
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        // Timeout - kill the process and retry
+                        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper timed out: {helperPath}");
+                        try { process.Kill(entireProcessTree: true); } catch { }
+
+                        if (attempt < maxRetries)
+                        {
+                            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Retrying in {retryDelayMs}ms...");
+                            await Task.Delay(retryDelayMs, cancellationToken);
                         }
                     }
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                catch (Exception ex)
                 {
-                    // Timeout - kill the process
-                    Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper timed out: {helperPath}");
-                    try { process.Kill(entireProcessTree: true); } catch { }
+                    Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper {helperPath} failed: {ex.Message}");
+
+                    if (attempt < maxRetries)
+                    {
+                        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Retrying in {retryDelayMs}ms...");
+                        await Task.Delay(retryDelayMs, cancellationToken);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper {helperPath} failed: {ex.Message}");
             }
         }
 
