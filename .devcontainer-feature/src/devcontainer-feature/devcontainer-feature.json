@@ -1,24 +1,12 @@
 {
   "id": "devcontainer-feature",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "Azure Artifacts Credential Provider",
   "documentationURL": "https://github.com/asidlo/credentialprovider-azureartifacts",
   "description": "Installs a silent/headless NuGet credential provider for Azure Artifacts that authenticates without interactive prompts.",
-  "options": {
-    "version": {
-      "type": "string",
-      "default": "latest",
-      "description": "Version to install (e.g., 'latest', 'v1.0.0', '1.2.3')"
-    },
-    "repository": {
-      "type": "string",
-      "default": "asidlo/credentialprovider-azureartifacts",
-      "description": "GitHub repository to download from (owner/repo format)"
-    }
-  },
+  "options": {},
   "installsAfter": [
-    "ghcr.io/devcontainers/features/dotnet",
-    "ghcr.io/devcontainers/features/github-cli"
+    "ghcr.io/devcontainers/features/dotnet"
   ],
   "containerEnv": {},
   "customizations": {

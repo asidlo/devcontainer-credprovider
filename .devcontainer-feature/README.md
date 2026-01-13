@@ -14,48 +14,46 @@ Add this feature to your `devcontainer.json`:
 }
 ```
 
-### With Options
+No additional options or authentication required - the credential provider binaries are embedded in the feature package.
+
+## Requirements
+
+- **.NET 8 Runtime** - Required to run the credential provider. Consider adding the dotnet feature:
 
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {
-      "version": "v1.0.5",
-      "repository": "asidlo/credentialprovider-azureartifacts"
-    }
+    "ghcr.io/devcontainers/features/dotnet:2": {},
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
   }
 }
 ```
 
-## Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `version` | string | `latest` | Version to install (e.g., 'latest', 'v1.0.0', '1.2.3') |
-| `repository` | string | `asidlo/credentialprovider-azureartifacts` | GitHub repository to download from |
-
-## Requirements
-
-- **GitHub CLI** - Required for private repositories. The feature will fall back to `curl` for public repos.
-- **.NET 8 Runtime** - Required to run the credential provider.
-
 ## What It Does
 
-1. Downloads the credential provider from GitHub releases
-2. Extracts and installs to `~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/`
+1. Copies the embedded credential provider binaries
+2. Installs to `~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/`
 3. Verifies the installation
 
 After installation, `dotnet restore` will automatically use this credential provider for Azure Artifacts feeds.
 
+## How It Works
+
+Unlike features that download at install time, this feature embeds the credential provider binaries directly in the OCI package. This means:
+
+- ✅ Works with private repositories (no GitHub auth needed during container build)
+- ✅ No network requests during feature installation
+- ✅ Faster installation
+
+The feature is built and published by the `publish-feature.yml` workflow, which compiles the credential provider and embeds it in the feature before publishing to GHCR.
+
 ## Publishing the Feature
 
-To publish this feature to GHCR:
+To publish this feature to GHCR, run the `Publish Devcontainer Feature` workflow from GitHub Actions. The workflow will:
 
-```bash
-# From the repo root
-cd .devcontainer-feature
-devcontainer features publish -r ghcr.io -n asidlo/credentialprovider-azureartifacts ./src
-```
+1. Build the credential provider from source
+2. Embed the binaries into the feature
+3. Publish to `ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature`
 
 ## Testing
 

@@ -1,0 +1,3 @@
+# Embedded binaries - added dynamically during publish workflow
+# Do not commit these; they are built and embedded at publish time
+netcore/
