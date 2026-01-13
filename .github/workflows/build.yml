@@ -178,3 +178,10 @@ jobs:
           files: ./artifacts/*
           draft: false
           prerelease: false
+
+      - name: Trigger devcontainer feature publish
+        run: |
+          echo "🐳 Triggering devcontainer feature publish workflow..."
+          gh workflow run publish-feature.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
