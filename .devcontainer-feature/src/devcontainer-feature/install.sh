@@ -27,7 +27,15 @@ EMBEDDED_DIR="$SCRIPT_DIR/netcore"
 if [ -d "$EMBEDDED_DIR" ] && [ -f "$EMBEDDED_DIR/CredentialProvider.AzureArtifacts.dll" ]; then
     echo "Using embedded credential provider binaries..."
     
-    # Create destination directory
+    # Create parent directories with permissive permissions
+    # This allows other features (like Microsoft's artifacts-helper) to also install credential providers
+    PLUGINS_DIR="$USER_HOME/.nuget/plugins/netcore"
+    mkdir -p "$PLUGINS_DIR"
+    chmod 755 "$USER_HOME/.nuget" 2>/dev/null || true
+    chmod 755 "$USER_HOME/.nuget/plugins" 2>/dev/null || true
+    chmod 755 "$PLUGINS_DIR" 2>/dev/null || true
+    
+    # Create our plugin directory
     mkdir -p "$PLUGIN_DEST"
     
     # Copy embedded binaries
