@@ -1,5 +1,5 @@
 {
-  "id": "azure-artifacts-credprovider",
+  "id": "devcontainer-feature",
   "version": "1.0.0",
   "name": "Azure Artifacts Credential Provider",
   "documentationURL": "https://github.com/asidlo/credentialprovider-azureartifacts",

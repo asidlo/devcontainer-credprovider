@@ -6,7 +6,7 @@
         "version": "8.0"
       },
       "ghcr.io/devcontainers/features/github-cli:1": {},
-      "azure-artifacts-credprovider": {}
+      "devcontainer-feature": {}
     }
   },
   "test_specific_version": {
@@ -16,7 +16,7 @@
         "version": "8.0"
       },
       "ghcr.io/devcontainers/features/github-cli:1": {},
-      "azure-artifacts-credprovider": {
+      "devcontainer-feature": {
         "version": "v1.0.0"
       }
     }

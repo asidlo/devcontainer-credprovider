@@ -92,7 +92,7 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/azure-artifacts-credprovider:1": {}
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
   }
 }
 ```
@@ -102,7 +102,7 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/azure-artifacts-credprovider:1": {
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {
       "version": "v1.0.5"
     }
   }

@@ -9,7 +9,7 @@ Add this feature to your `devcontainer.json`:
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/azure-artifacts-credprovider:1": {}
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
   }
 }
 ```
@@ -19,7 +19,7 @@ Add this feature to your `devcontainer.json`:
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/azure-artifacts-credprovider:1": {
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {
       "version": "v1.0.5",
       "repository": "asidlo/credentialprovider-azureartifacts"
     }
@@ -61,5 +61,5 @@ devcontainer features publish -r ghcr.io -n asidlo/credentialprovider-azureartif
 
 ```bash
 cd .devcontainer-feature
-devcontainer features test -f azure-artifacts-credprovider
+devcontainer features test -f devcontainer-feature
 ```
