@@ -126,15 +126,34 @@ public static class Program
 
             Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Plugin connected, protocol version: {plugin.Connection.ProtocolVersion}");
 
-            // Keep alive until cancelled
+            // Listen for connection faults (NuGet client disconnect)
+            var connectionClosed = new TaskCompletionSource<bool>();
+            plugin.Connection.Faulted += (sender, args) =>
+            {
+                Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Connection faulted: {args.Exception?.Message}");
+                connectionClosed.TrySetResult(true);
+            };
+
+            plugin.Closed += (sender, args) =>
+            {
+                Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin closed by client");
+                connectionClosed.TrySetResult(true);
+            };
+
+            // Keep alive until connection closes or cancelled
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
+                await Task.WhenAny(
+                    connectionClosed.Task,
+                    Task.Delay(Timeout.InfiniteTimeSpan, cts.Token)
+                );
             }
             catch (OperationCanceledException)
             {
-                Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin shutting down...");
+                // Expected when Ctrl+C pressed
             }
+
+            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin shutting down...");
 
             return 0;
         }
