@@ -2,72 +2,41 @@ name: Build & Release
 on:
   push:
     branches: ["main"]
+    tags:
+      - "v*"  # Trigger on version tags for release
   pull_request:
     branches: ["main"]
   workflow_dispatch:
     inputs:
       create_release:
-        description: "Create a GitHub release"
+        description: "Create a GitHub release (tag the commit first with 'git tag v1.2.3 && git push --tags')"
         required: false
         default: false
         type: boolean
-      version:
-        description: "Version for release (check job summary for current latest)"
-        required: false
-        default: "1.0.0"
-        type: string
 jobs:
-  check_version:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get latest release info
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          echo "## 📦 Version Information" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Try to get the latest release
-          LATEST=$(gh release view --repo ${{ github.repository }} --json tagName,publishedAt --jq '.tagName + " (" + .publishedAt[0:10] + ")"' 2>/dev/null || echo "none")
-          
-          if [ "$LATEST" = "none" ]; then
-            echo "**Current latest release:** No releases yet" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Suggested first version: \`1.0.0\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Current latest release:** \`$LATEST\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            
-            # Extract just the version number for suggestions
-            CURRENT_VERSION=$(echo "$LATEST" | sed 's/^v//' | cut -d' ' -f1)
-            MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
-            MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
-            PATCH=$(echo $CURRENT_VERSION | cut -d. -f3)
-            
-            echo "**Suggested next versions:**" >> $GITHUB_STEP_SUMMARY
-            echo "- Patch: \`$MAJOR.$MINOR.$((PATCH + 1))\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Minor: \`$MAJOR.$((MINOR + 1)).0\`" >> $GITHUB_STEP_SUMMARY
-            echo "- Major: \`$((MAJOR + 1)).0.0\`" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
-            echo "---" >> $GITHUB_STEP_SUMMARY
-            echo "🚀 **Creating release:** \`v${{ github.event.inputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "ℹ️ *To create a release, re-run with 'Create a GitHub release' checked*" >> $GITHUB_STEP_SUMMARY
-          fi
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for MinVer to find tags
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.x
+      - name: Restore and get version
+        id: version
+        run: |
+          dotnet restore src/CredentialProvider.AzureArtifacts
+          # MinVer outputs version during build, capture it
+          VERSION=$(dotnet msbuild src/CredentialProvider.AzureArtifacts -getProperty:Version -nologo)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 **Build Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
       - name: Publish credential provider
         run: |
           # Framework-dependent build - portable across all platforms with .NET 8 runtime
@@ -134,25 +103,23 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'
+    # Release when: pushing a tag OR manual trigger with create_release checked
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     permissions:
       contents: write
     steps:
-      - name: Show release info
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Determine version
+        id: version
         run: |
-          echo "## 🚀 Creating Release" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          LATEST=$(gh release view --repo ${{ github.repository }} --json tagName --jq '.tagName' 2>/dev/null || echo "none")
-          
-          if [ "$LATEST" = "none" ]; then
-            echo "**Previous release:** None (this is the first release!)" >> $GITHUB_STEP_SUMMARY
+          # Use tag name if triggered by tag push, otherwise use MinVer version from build
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
           else
-            echo "**Previous release:** \`$LATEST\`" >> $GITHUB_STEP_SUMMARY
+            VERSION="v${{ needs.build.outputs.version }}"
           fi
-          echo "**New release:** \`v${{ github.event.inputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_num=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "🏷️ Release version: $VERSION" >> $GITHUB_STEP_SUMMARY
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -163,10 +130,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: v${{ github.event.inputs.version }}
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
           body: |
-            ## Azure Artifacts Credential Provider v${{ github.event.inputs.version }}
+            ## Azure Artifacts Credential Provider ${{ steps.version.outputs.version }}
 
             A NuGet credential provider plugin for Azure Artifacts that automatically acquires tokens.
 
@@ -179,7 +146,7 @@ jobs:
 
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/credentialprovider-azureartifacts.tar.gz \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/credentialprovider-azureartifacts.tar.gz \
               | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
@@ -188,7 +155,7 @@ jobs:
             ### Install (Windows PowerShell)
 
             ```powershell
-            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/credentialprovider-azureartifacts.zip" -OutFile "$env:TEMP\cred-provider.zip"
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/credentialprovider-azureartifacts.zip" -OutFile "$env:TEMP\cred-provider.zip"
             Expand-Archive -Path "$env:TEMP\cred-provider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
             & "$env:TEMP\cred-provider\install.ps1"
             Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "$env:TEMP\cred-provider.zip"

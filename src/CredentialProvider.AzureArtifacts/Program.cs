@@ -3,6 +3,7 @@
 // See: https://github.com/NuGet/Home/wiki/NuGet-cross-plat-authentication-plugin
 
 using System.Diagnostics;
+using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
 using NuGet.Protocol.Plugins;
@@ -21,6 +22,17 @@ public static class Program
 
     private const string AzureDevOpsScope = "499b84ac-1321-427f-aa17-267ca6975798/.default";
 
+    /// <summary>
+    /// Gets the version from the assembly's InformationalVersion attribute (set by MinVer).
+    /// Format: "1.2.3" for tagged releases, "1.2.4-alpha.0.5+abc1234" for untagged commits.
+    /// </summary>
+    private static string GetVersion()
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var infoVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+        return infoVersion?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "unknown";
+    }
+
     public static async Task<int> Main(string[] args)
     {
         // Handle -Plugin argument (required for NuGet to recognize this as a credential provider)
@@ -30,13 +42,21 @@ public static class Program
         }
 
         // Handle standalone mode for testing
+        if (args.Contains("--version") || args.Contains("-v"))
+        {
+            Console.WriteLine($"CredentialProvider.AzureArtifacts {GetVersion()}");
+            return 0;
+        }
+
         if (args.Contains("--help") || args.Contains("-h"))
         {
-            Console.WriteLine("AzureArtifacts.CredentialProvider - NuGet Credential Provider for Azure Artifacts");
+            Console.WriteLine($"AzureArtifacts.CredentialProvider v{GetVersion()}");
+            Console.WriteLine("NuGet Credential Provider for Azure Artifacts");
             Console.WriteLine();
             Console.WriteLine("Usage:");
-            Console.WriteLine("  CredentialProvider.AzureArtifacts -Plugin    Run as NuGet plugin");
-            Console.WriteLine("  CredentialProvider.AzureArtifacts --test     Test credential acquisition");
+            Console.WriteLine("  CredentialProvider.AzureArtifacts -Plugin     Run as NuGet plugin");
+            Console.WriteLine("  CredentialProvider.AzureArtifacts --test      Test credential acquisition");
+            Console.WriteLine("  CredentialProvider.AzureArtifacts --version   Show version info");
             Console.WriteLine();
             return 0;
         }
@@ -52,7 +72,8 @@ public static class Program
 
     private static async Task<int> TestCredentialsAsync()
     {
-        Console.WriteLine("Testing credential acquisition...");
+        Console.WriteLine($"CredentialProvider.AzureArtifacts v{GetVersion()}");
+        Console.WriteLine("Testing credential acquisition...");;
 
         var token = await TryGetAccessTokenAsync("https://pkgs.dev.azure.com/test/");
 
