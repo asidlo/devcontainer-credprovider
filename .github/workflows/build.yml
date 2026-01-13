@@ -182,6 +182,6 @@ jobs:
       - name: Trigger devcontainer feature publish
         run: |
           echo "🐳 Triggering devcontainer feature publish workflow..."
-          gh workflow run publish-feature.yml
+          gh workflow run publish-feature.yml -R ${{ github.repository }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
