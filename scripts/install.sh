@@ -12,10 +12,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DEST="$HOME/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts"
 
 # Check for source in order of preference:
-# 1. Tarball extraction: binaries in same directory as install.sh (CredentialProvider.AzureArtifacts.dll)
-# 2. NuGet package structure: tools/netcore/CredentialProvider.AzureArtifacts/
-# 3. Local publish output: bin/publish/
-if [ -f "$SCRIPT_DIR/CredentialProvider.AzureArtifacts.dll" ]; then
+# 1. Tarball extraction: netcore/ subfolder with .dll (new portable format)
+# 2. Tarball extraction: .dll in same directory as install.sh
+# 3. NuGet package structure: tools/netcore/CredentialProvider.AzureArtifacts/
+# 4. Local publish output: bin/publish/
+#
+# NOTE: NuGet plugin discovery REQUIRES a .dll file for netcore plugins.
+# Self-contained executables do NOT work with ~/.nuget/plugins/netcore/ discovery.
+# See: https://learn.microsoft.com/en-us/nuget/reference/extensibility/nuget-cross-platform-plugins
+
+if [ -f "$SCRIPT_DIR/netcore/CredentialProvider.AzureArtifacts.dll" ]; then
+  PLUGIN_SOURCE="$SCRIPT_DIR/netcore"
+elif [ -f "$SCRIPT_DIR/CredentialProvider.AzureArtifacts.dll" ]; then
   PLUGIN_SOURCE="$SCRIPT_DIR"
 elif [ -d "$SCRIPT_DIR/netcore/CredentialProvider.AzureArtifacts" ]; then
   PLUGIN_SOURCE="$SCRIPT_DIR/netcore/CredentialProvider.AzureArtifacts"
@@ -24,7 +32,8 @@ elif [ -d "$SCRIPT_DIR/bin/publish" ]; then
 else
   echo "ERROR: Cannot find credential provider binaries."
   echo "Looking for:"
-  echo "  - $SCRIPT_DIR/CredentialProvider.AzureArtifacts.dll (tarball extraction)"
+  echo "  - $SCRIPT_DIR/netcore/CredentialProvider.AzureArtifacts.dll (tarball extraction)"
+  echo "  - $SCRIPT_DIR/CredentialProvider.AzureArtifacts.dll (flat extraction)"
   echo "  - $SCRIPT_DIR/netcore/CredentialProvider.AzureArtifacts/ (NuGet package)"
   echo "  - $SCRIPT_DIR/bin/publish/ (local build)"
   echo ""
@@ -43,9 +52,6 @@ rm -rf "$PLUGIN_DEST"/*
 
 # Copy all files
 cp -r "$PLUGIN_SOURCE/"* "$PLUGIN_DEST/"
-
-# Make the executable runnable (for Linux/macOS)
-chmod +x "$PLUGIN_DEST/CredentialProvider.AzureArtifacts" 2>/dev/null || true
 
 echo "Credential provider installed to: $PLUGIN_DEST"
 echo ""

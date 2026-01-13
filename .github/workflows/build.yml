@@ -21,19 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    strategy:
-      matrix:
-        include:
-          - rid: linux-x64
-            os_name: linux
-          - rid: linux-arm64
-            os_name: linux-arm64
-          - rid: osx-x64
-            os_name: osx
-          - rid: osx-arm64
-            os_name: osx-arm64
-          - rid: win-x64
-            os_name: win
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -43,36 +30,36 @@ jobs:
           dotnet-version: 8.x
       - name: Publish credential provider
         run: |
+          # Framework-dependent build - portable across all platforms with .NET 8 runtime
           dotnet publish src/CredentialProvider.AzureArtifacts \
             -c Release \
-            -r ${{ matrix.rid }} \
-            -o ./publish/${{ matrix.rid }}
+            -o ./publish/netcore
       - name: Copy install scripts
         run: |
-          cp scripts/install.sh ./publish/${{ matrix.rid }}/
-          cp scripts/uninstall.sh ./publish/${{ matrix.rid }}/
-          chmod +x ./publish/${{ matrix.rid }}/install.sh
-          chmod +x ./publish/${{ matrix.rid }}/uninstall.sh
-      - name: Create tarball (Linux/macOS)
-        if: matrix.os_name != 'win'
+          cp scripts/install.sh ./publish/
+          cp scripts/uninstall.sh ./publish/
+          cp scripts/install.ps1 ./publish/
+          cp scripts/uninstall.ps1 ./publish/
+          chmod +x ./publish/install.sh
+          chmod +x ./publish/uninstall.sh
+      - name: Create tarball
         run: |
-          cd ./publish/${{ matrix.rid }}
-          tar -czvf ../credentialprovider-azureartifacts-${{ matrix.os_name }}.tar.gz .
-      - name: Create zip (Windows)
-        if: matrix.os_name == 'win'
+          cd ./publish
+          tar -czvf credentialprovider-azureartifacts.tar.gz install.sh uninstall.sh netcore/
+      - name: Create zip (for Windows users)
         run: |
-          cp scripts/install.ps1 ./publish/${{ matrix.rid }}/
-          cp scripts/uninstall.ps1 ./publish/${{ matrix.rid }}/
-          cd ./publish/${{ matrix.rid }}
-          zip -r ../credentialprovider-azureartifacts-${{ matrix.os_name }}.zip .
-      - name: Upload artifact
+          cd ./publish
+          zip -r credentialprovider-azureartifacts.zip install.ps1 uninstall.ps1 netcore/
+      - name: Upload tarball artifact
         uses: actions/upload-artifact@v4
         with:
-          name: credentialprovider-azureartifacts-${{ matrix.os_name }}
-          path: |
-            ./publish/credentialprovider-azureartifacts-${{ matrix.os_name }}.tar.gz
-            ./publish/credentialprovider-azureartifacts-${{ matrix.os_name }}.zip
-          if-no-files-found: ignore
+          name: credentialprovider-azureartifacts-tarball
+          path: ./publish/credentialprovider-azureartifacts.tar.gz
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: credentialprovider-azureartifacts-zip
+          path: ./publish/credentialprovider-azureartifacts.zip
   summary:
     needs: build
     runs-on: ubuntu-latest
@@ -82,6 +69,13 @@ jobs:
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🚀 Credential Provider Build Complete!
 
+          This is a **framework-dependent** build that works on any platform with .NET 8 runtime.
+
+          ### Prerequisites
+
+          - .NET 8 runtime installed (required to run the credential provider)
+          - Download: https://dotnet.microsoft.com/download/dotnet/8.0
+
           ### Download Run Artifacts (this build)
 
           Use the GitHub CLI to download artifacts from this workflow run:
@@ -89,29 +83,12 @@ jobs:
           \`\`\`bash
           # Install GitHub CLI if needed: https://cli.github.com/
 
-          # Linux (x64):
-          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-linux -R ${{ github.repository }} \
-            && tar xzf credentialprovider-azureartifacts-linux.tar.gz -C /tmp/cred-provider \
+          # Any platform (Linux, macOS, Windows with WSL):
+          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-tarball -R ${{ github.repository }} \
+            && mkdir -p /tmp/cred-provider \
+            && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-linux.tar.gz
-
-          # Linux (ARM64):
-          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-linux-arm64 -R ${{ github.repository }} \
-            && tar xzf credentialprovider-azureartifacts-linux-arm64.tar.gz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-linux-arm64.tar.gz
-
-          # macOS (Intel):
-          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-osx -R ${{ github.repository }} \
-            && tar xzf credentialprovider-azureartifacts-osx.tar.gz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-osx.tar.gz
-
-          # macOS (Apple Silicon):
-          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-osx-arm64 -R ${{ github.repository }} \
-            && tar xzf credentialprovider-azureartifacts-osx-arm64.tar.gz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts-osx-arm64.tar.gz
+            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
           \`\`\`
 
           ---
@@ -120,37 +97,9 @@ jobs:
 
           Use curl to download from a published release:
 
-          **Linux (x64):**
           \`\`\`bash
           mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux.tar.gz \
-            | tar xz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider
-          \`\`\`
-
-          **Linux (ARM64):**
-          \`\`\`bash
-          mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux-arm64.tar.gz \
-            | tar xz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider
-          \`\`\`
-
-          **macOS (Intel):**
-          \`\`\`bash
-          mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx.tar.gz \
-            | tar xz -C /tmp/cred-provider \
-            && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider
-          \`\`\`
-
-          **macOS (Apple Silicon):**
-          \`\`\`bash
-          mkdir -p /tmp/cred-provider \
-            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx-arm64.tar.gz \
+            && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts.tar.gz \
             | tar xz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
             && rm -rf /tmp/cred-provider
@@ -180,42 +129,28 @@ jobs:
 
             A NuGet credential provider plugin for Azure Artifacts that automatically acquires tokens.
 
-            ### Install Commands
+            ### Prerequisites
 
-            **Linux (x64):**
+            - .NET 8 runtime installed (required to run the credential provider)
+            - Download: https://dotnet.microsoft.com/download/dotnet/8.0
+
+            ### Install (Linux/macOS)
+
             ```bash
             mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux.tar.gz \
+              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts.tar.gz \
               | tar xz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
               && rm -rf /tmp/cred-provider
             ```
 
-            **Linux (ARM64):**
-            ```bash
-            mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-linux-arm64.tar.gz \
-              | tar xz -C /tmp/cred-provider \
-              && /tmp/cred-provider/install.sh \
-              && rm -rf /tmp/cred-provider
-            ```
+            ### Install (Windows PowerShell)
 
-            **macOS (Intel):**
-            ```bash
-            mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx.tar.gz \
-              | tar xz -C /tmp/cred-provider \
-              && /tmp/cred-provider/install.sh \
-              && rm -rf /tmp/cred-provider
-            ```
-
-            **macOS (Apple Silicon):**
-            ```bash
-            mkdir -p /tmp/cred-provider \
-              && curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts-osx-arm64.tar.gz \
-              | tar xz -C /tmp/cred-provider \
-              && /tmp/cred-provider/install.sh \
-              && rm -rf /tmp/cred-provider
+            ```powershell
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/latest/download/credentialprovider-azureartifacts.zip" -OutFile "$env:TEMP\cred-provider.zip"
+            Expand-Archive -Path "$env:TEMP\cred-provider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
+            & "$env:TEMP\cred-provider\install.ps1"
+            Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "$env:TEMP\cred-provider.zip"
             ```
 
             ### After Installation
