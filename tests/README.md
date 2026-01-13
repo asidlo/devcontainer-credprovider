@@ -71,6 +71,22 @@ dotnet test --filter "FullyQualifiedName~IdentityHandlingTests"
 dotnet test --verbosity detailed
 ```
 
+### Run Tests with Code Coverage
+
+```bash
+# Collect coverage
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+# Generate HTML report (requires ReportGenerator)
+dotnet tool install --global dotnet-reportgenerator-globaltool
+reportgenerator -reports:./coverage/**/coverage.cobertura.xml -targetdir:./coverage/report -reporttypes:"Html;MarkdownSummaryGithub"
+
+# View report
+open ./coverage/report/index.html  # macOS
+xdg-open ./coverage/report/index.html  # Linux
+start ./coverage/report/index.html  # Windows
+```
+
 ### Run Tests in CI/CD
 
 ```bash
@@ -81,6 +97,20 @@ dotnet test --configuration Release --logger "trx;LogFileName=test-results.trx"
 
 - .NET 8 SDK
 - No additional dependencies (all tests are self-contained)
+
+## Code Coverage
+
+The project uses Coverlet for code coverage collection and ReportGenerator for report generation.
+
+**CI/CD Integration:**
+- Coverage is automatically collected on every build and PR
+- Coverage reports are published as build artifacts
+- Coverage summary is added to GitHub Actions workflow summary
+- Coverage results are posted as PR comments
+- Target coverage: 80% (currently tracking and reporting)
+
+**Local Coverage:**
+See "Run Tests with Code Coverage" section above for local coverage generation.
 
 ## What's Tested
 

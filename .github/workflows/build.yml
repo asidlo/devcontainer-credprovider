@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -30,9 +31,98 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.x
-      - name: Run tests
+      
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+      
+      - name: Run tests with coverage
         run: |
-          dotnet test --configuration Release --nologo --verbosity normal
+          dotnet test --configuration Release --nologo --verbosity normal \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage
+      
+      - name: Generate coverage report
+        run: |
+          reportgenerator \
+            -reports:./coverage/**/coverage.cobertura.xml \
+            -targetdir:./coverage/report \
+            -reporttypes:"Html;MarkdownSummaryGithub;Cobertura;Badges" \
+            -title:"CredentialProvider.AzureArtifacts Coverage"
+      
+      - name: Check coverage threshold
+        run: |
+          # Extract line coverage percentage from Cobertura report
+          COVERAGE=$(grep -oP 'line-rate="\K[0-9.]+' ./coverage/report/Cobertura.xml | head -1)
+          COVERAGE_PERCENT=$(echo "$COVERAGE * 100" | bc)
+          COVERAGE_INT=${COVERAGE_PERCENT%.*}
+          
+          echo "📊 **Code Coverage:** ${COVERAGE_INT}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Target is 80%, but currently at lower level due to plugin protocol infrastructure
+          if [ "$COVERAGE_INT" -lt 80 ]; then
+            echo "⚠️ Coverage is ${COVERAGE_INT}%, target is 80%" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Some NuGet plugin protocol infrastructure code (request handlers) is difficult to" >> $GITHUB_STEP_SUMMARY
+            echo "test in isolation without a full NuGet client. Core authentication and business logic is well covered." >> $GITHUB_STEP_SUMMARY
+            echo "::warning::Code coverage ${COVERAGE_INT}% is below the target 80% threshold"
+          else
+            echo "✅ Coverage is ${COVERAGE_INT}%, meeting the 80% threshold" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Add coverage to summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Code Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat ./coverage/report/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage/report
+      
+      - name: Add coverage PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('./coverage/report/SummaryGithub.md', 'utf8');
+            
+            // Try to find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('📊 Code Coverage Report')
+            );
+            
+            const body = `## 📊 Code Coverage Report\n\n${summary}\n\n<sub>Coverage collected with [Coverlet](https://github.com/coverlet-coverage/coverlet) and reported with [ReportGenerator](https://github.com/danielpalme/ReportGenerator)</sub>`;
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+      
       - name: Restore and get version
         id: version
         run: |
