@@ -1,0 +1,24 @@
+{
+  "test": {
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "features": {
+      "ghcr.io/devcontainers/features/dotnet:2": {
+        "version": "8.0"
+      },
+      "ghcr.io/devcontainers/features/github-cli:1": {},
+      "azure-artifacts-credprovider": {}
+    }
+  },
+  "test_specific_version": {
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "features": {
+      "ghcr.io/devcontainers/features/dotnet:2": {
+        "version": "8.0"
+      },
+      "ghcr.io/devcontainers/features/github-cli:1": {},
+      "azure-artifacts-credprovider": {
+        "version": "v1.0.0"
+      }
+    }
+  }
+}

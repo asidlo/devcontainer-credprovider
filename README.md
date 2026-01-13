@@ -16,46 +16,52 @@ This credential provider authenticates silently using:
 2. **Auth helper** (`~/ado-auth-helper`) - from devcontainer features
 3. **Azure.Identity** (`DefaultAzureCredential`) - Azure CLI, managed identity, etc.
 
+## Prerequisites
+
+- **.NET 8 runtime** - Download from https://dotnet.microsoft.com/download/dotnet/8.0
+- **GitHub CLI** (for private repo downloads) - https://cli.github.com/
+
 ## Quick Install
 
-Download and install from GitHub releases:
+Download and install from GitHub releases using the GitHub CLI:
 
-**Linux (x64):**
-
-```bash
-mkdir -p /tmp/cred-provider && curl -fsSL https://github.com/YOUR_ORG/azure-artifacts-silent-credprovider/releases/latest/download/credential-provider-linux.tar.gz | tar xz -C /tmp/cred-provider && /tmp/cred-provider/install.sh && rm -rf /tmp/cred-provider
-```
-
-**Linux (ARM64):**
+**Linux/macOS:**
 
 ```bash
-mkdir -p /tmp/cred-provider && curl -fsSL https://github.com/YOUR_ORG/azure-artifacts-silent-credprovider/releases/latest/download/credential-provider-linux-arm64.tar.gz | tar xz -C /tmp/cred-provider && /tmp/cred-provider/install.sh && rm -rf /tmp/cred-provider
+gh release download -R asidlo/credentialprovider-azureartifacts -p "*.tar.gz" \
+  && mkdir -p /tmp/cred-provider \
+  && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
+  && /tmp/cred-provider/install.sh \
+  && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
 ```
 
-**macOS (Intel):**
+**Windows (PowerShell):**
 
-```bash
-mkdir -p /tmp/cred-provider && curl -fsSL https://github.com/YOUR_ORG/azure-artifacts-silent-credprovider/releases/latest/download/credential-provider-osx.tar.gz | tar xz -C /tmp/cred-provider && /tmp/cred-provider/install.sh && rm -rf /tmp/cred-provider
+```powershell
+gh release download -R asidlo/credentialprovider-azureartifacts -p "*.zip"
+Expand-Archive -Path "credentialprovider-azureartifacts.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
+& "$env:TEMP\cred-provider\install.ps1"
+Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "credentialprovider-azureartifacts.zip"
 ```
-
-**macOS (Apple Silicon):**
-
-```bash
-mkdir -p /tmp/cred-provider && curl -fsSL https://github.com/YOUR_ORG/azure-artifacts-silent-credprovider/releases/latest/download/credential-provider-osx-arm64.tar.gz | tar xz -C /tmp/cred-provider && /tmp/cred-provider/install.sh && rm -rf /tmp/cred-provider
-```
-
-> **Note:** Replace `YOUR_ORG/azure-artifacts-silent-credprovider` with your actual GitHub repository.
 
 After installation, just run `dotnet restore` - no environment variables needed!
+
+### Verify Installation
+
+```bash
+# Check version
+dotnet ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll --version
+
+# Test credential acquisition
+dotnet ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll --test
+```
 
 ## Building from Source
 
 ```bash
-git clone https://github.com/YOUR_ORG/azure-artifacts-silent-credprovider.git
-cd azure-artifacts-silent-credprovider
-dotnet publish src/CredentialProvider.AzureArtifacts -c Release -o publish
-cp scripts/install.sh publish/
-./publish/install.sh
+git clone https://github.com/asidlo/credentialprovider-azureartifacts.git
+cd credentialprovider-azureartifacts
+./scripts/test-local-install.sh
 ```
 
 ## How It Works
@@ -79,9 +85,33 @@ When NuGet requests credentials for an Azure Artifacts feed:
    - Environment variables
    - Managed Identity (in Azure)
 
-## Devcontainer Integration
+## Devcontainer Feature (Recommended)
 
-Add this to your `.devcontainer/devcontainer.json`:
+The easiest way to use this in devcontainers is with the published devcontainer feature:
+
+```json
+{
+  "features": {
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/azure-artifacts-credprovider:1": {}
+  }
+}
+```
+
+### With Specific Version
+
+```json
+{
+  "features": {
+    "ghcr.io/asidlo/credentialprovider-azureartifacts/azure-artifacts-credprovider:1": {
+      "version": "v1.0.5"
+    }
+  }
+}
+```
+
+## Alternative: Manual Devcontainer Integration
+
+If you prefer a script-based approach, add this to your `.devcontainer/devcontainer.json`:
 
 ```json
 {
@@ -93,11 +123,17 @@ Create `.devcontainer/scripts/setup-nuget.sh`:
 
 ```bash
 #!/bin/bash
-mkdir -p /tmp/cred-provider \
-  && curl -fsSL https://github.com/YOUR_ORG/azure-artifacts-silent-credprovider/releases/latest/download/credential-provider-linux.tar.gz \
-  | tar xz -C /tmp/cred-provider \
-  && /tmp/cred-provider/install.sh \
-  && rm -rf /tmp/cred-provider
+# Install GitHub CLI if not present (or use curl for public repos)
+if command -v gh &> /dev/null; then
+  gh release download -R asidlo/credentialprovider-azureartifacts -p "*.tar.gz" \
+    && mkdir -p /tmp/cred-provider \
+    && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
+    && /tmp/cred-provider/install.sh \
+    && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
+else
+  echo "GitHub CLI not found. Install from https://cli.github.com/"
+  exit 1
+fi
 
 # Now restore works automatically
 dotnet restore

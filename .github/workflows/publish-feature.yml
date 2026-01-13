@@ -1,0 +1,61 @@
+name: Publish Devcontainer Feature
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the feature to GHCR"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install devcontainer CLI
+        run: npm install -g @devcontainers/cli
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish feature
+        run: |
+          cd .devcontainer-feature
+          devcontainer features publish \
+            --registry ghcr.io \
+            --namespace ${{ github.repository_owner }}/credentialprovider-azureartifacts \
+            ./src
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## 📦 Devcontainer Feature Published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The feature is now available at:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          echo "{" >> $GITHUB_STEP_SUMMARY
+          echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
+          echo "    \"ghcr.io/${{ github.repository_owner }}/credentialprovider-azureartifacts/azure-artifacts-credprovider:1\": {}" >> $GITHUB_STEP_SUMMARY
+          echo "  }" >> $GITHUB_STEP_SUMMARY
+          echo "}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
