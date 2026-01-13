@@ -66,18 +66,19 @@ cd credentialprovider-azureartifacts
 
 ## Running Tests
 
-This project includes comprehensive tests for installation and authentication:
+This project includes comprehensive tests for installation, authentication, and NuGet plugin integration:
 
 ```bash
-# Run unit tests
+# Run all tests
 dotnet test
 
-# Run integration tests
-./tests/test-installation-and-auth.sh
-./tests/test-devcontainer-feature.sh
+# Run specific test categories
+dotnet test --filter "FullyQualifiedName~AuthenticationTests"
+dotnet test --filter "FullyQualifiedName~NuGetPluginIntegrationTests"
+dotnet test --filter "FullyQualifiedName~IdentityHandlingTests"
 ```
 
-See [tests/README.md](tests/README.md) for more details on test coverage.
+See [tests/README.md](tests/README.md) for detailed information about test coverage (59 tests covering all authentication methods, plugin integration, and installation scenarios).
 
 ## How It Works
 
