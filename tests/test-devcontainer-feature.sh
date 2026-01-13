@@ -59,9 +59,26 @@ cp "$FEATURE_SRC/install.sh" "$TEST_FEATURE_DIR/"
 export _REMOTE_USER_HOME="$TEST_HOME"
 export _REMOTE_USER="testuser"
 
-# Run the install script (redirect permission errors to /dev/null since we can't write to /etc)
+# Run the install script (ignore permission errors for /etc since we're not root)
 cd "$TEST_FEATURE_DIR"
-bash install.sh 2>&1 | grep -v "Permission denied" || true
+set +e  # Temporarily disable exit on error
+bash install.sh > /tmp/install-output.log 2>&1
+INSTALL_EXIT_CODE=$?
+set -e  # Re-enable exit on error
+
+# Show output excluding permission denied errors
+grep -v "Permission denied" /tmp/install-output.log || true
+rm -f /tmp/install-output.log
+
+# Check if installation actually succeeded (exit code 0 or permission error on /etc only)
+if [ $INSTALL_EXIT_CODE -ne 0 ]; then
+    # Installation failed, but check if it was only due to /etc permissions
+    if [ ! -f "$TEST_HOME/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll" ]; then
+        echo "✗ Feature installation failed with exit code $INSTALL_EXIT_CODE"
+        exit 1
+    fi
+    # Plugin was installed despite /etc error, which is acceptable
+fi
 
 # Verify installation
 PLUGIN_DEST="$TEST_HOME/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts"

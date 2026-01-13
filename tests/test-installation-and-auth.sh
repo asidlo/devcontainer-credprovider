@@ -49,7 +49,10 @@ echo ""
 # Test 3: Run install script
 echo "Test 3: Testing installation script..."
 cd "$PUBLISH_DIR"
-HOME="$TEST_HOME" ./install.sh > /dev/null
+if ! HOME="$TEST_HOME" ./install.sh > /dev/null 2>&1; then
+    echo "✗ Installation script failed"
+    exit 1
+fi
 
 # Verify installation
 if [ ! -f "$PLUGIN_DEST/CredentialProvider.AzureArtifacts.dll" ]; then
