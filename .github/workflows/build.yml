@@ -30,6 +30,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.x
+      - name: Run tests
+        run: |
+          dotnet test --configuration Release --nologo --verbosity normal
       - name: Restore and get version
         id: version
         run: |

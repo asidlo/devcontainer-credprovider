@@ -64,6 +64,21 @@ cd credentialprovider-azureartifacts
 ./scripts/test-local-install.sh
 ```
 
+## Running Tests
+
+This project includes comprehensive tests for installation and authentication:
+
+```bash
+# Run unit tests
+dotnet test
+
+# Run integration tests
+./tests/test-installation-and-auth.sh
+./tests/test-devcontainer-feature.sh
+```
+
+See [tests/README.md](tests/README.md) for more details on test coverage.
+
 ## How It Works
 
 This is a **NuGet credential provider plugin** that NuGet automatically calls when it needs authentication. The plugin:

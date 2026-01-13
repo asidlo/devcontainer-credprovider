@@ -40,6 +40,14 @@ Located in `CredentialProvider.AzureArtifacts.Tests/`
 
 ## Running Tests
 
+### Run All Tests (Recommended)
+
+```bash
+./tests/run-all-tests.sh
+```
+
+This runs all unit tests and integration tests in sequence.
+
 ### Run All Unit Tests
 
 ```bash
