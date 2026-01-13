@@ -13,18 +13,6 @@
   "containerEnv": {},
   "customizations": {
     "vscode": {
-      "settings": {
-        "dotnetAcquisitionExtension.existingDotnetPath": [
-          {
-            "extensionId": "ms-dotnettools.csharp",
-            "path": "/usr/share/dotnet/dotnet"
-          },
-          {
-            "extensionId": "ms-dotnettools.csdevkit",
-            "path": "/usr/share/dotnet/dotnet"
-          }
-        ]
-      },
       "extensions": []
     }
   }
