@@ -1,5 +1,7 @@
 # Azure Artifacts Silent Credential Provider
 
+[![Build & Test](https://github.com/asidlo/credentialprovider-azureartifacts/actions/workflows/build.yml/badge.svg)](https://github.com/asidlo/credentialprovider-azureartifacts/actions/workflows/build.yml)
+
 A silent/headless NuGet credential provider for Azure Artifacts that authenticates **without interactive prompts** - perfect for devcontainers, codespaces, and CI environments.
 
 ## Why This Exists
@@ -63,6 +65,27 @@ git clone https://github.com/asidlo/credentialprovider-azureartifacts.git
 cd credentialprovider-azureartifacts
 ./scripts/test-local-install.sh
 ```
+
+## Running Tests
+
+This project includes comprehensive tests for installation, authentication, and NuGet plugin integration:
+
+```bash
+# Run all tests
+dotnet test
+
+# Run tests with coverage
+dotnet test --collect:"XPlat Code Coverage"
+
+# Run specific test categories
+dotnet test --filter "FullyQualifiedName~AuthenticationTests"
+dotnet test --filter "FullyQualifiedName~NuGetPluginIntegrationTests"
+dotnet test --filter "FullyQualifiedName~IdentityHandlingTests"
+```
+
+See [tests/README.md](tests/README.md) for detailed information about test coverage (59 tests covering all authentication methods, plugin integration, and installation scenarios).
+
+**Coverage**: The CI/CD pipeline automatically generates code coverage reports for every build and PR. Coverage reports are published as build artifacts and summarized in PR comments.
 
 ## How It Works
 
