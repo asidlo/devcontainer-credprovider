@@ -93,7 +93,7 @@ jobs:
           cd .devcontainer-feature
           devcontainer features publish \
             --registry ghcr.io \
-            --namespace asidlo/features \
+            --namespace asidlo/features/devcontainer-credprovider \
             ./src
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +110,7 @@ jobs:
           echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
           echo "{" >> $GITHUB_STEP_SUMMARY
           echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
-          echo "    \"ghcr.io/asidlo/features/devcontainer-credprovider:1\": {}" >> $GITHUB_STEP_SUMMARY
+          echo "    \"ghcr.io/asidlo/features/devcontainer-credprovider\": {}" >> $GITHUB_STEP_SUMMARY
           echo "  }" >> $GITHUB_STEP_SUMMARY
           echo "}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
