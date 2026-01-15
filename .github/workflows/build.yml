@@ -381,9 +381,16 @@ jobs:
       
       - name: Publish Release
         if: steps.create-release.outputs.id != ''
-        run: gh release edit ${{ steps.version.outputs.version }} --draft=false
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ steps.create-release.outputs.id }},
+              draft: false
+            });
+            console.log('✅ Published release ${{ steps.version.outputs.version }}');
 
   # Publish the devcontainer feature after creating a release
   publish-feature:
