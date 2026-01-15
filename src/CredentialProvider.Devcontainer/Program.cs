@@ -9,6 +9,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using NuGet.Protocol.Plugins;
+using OtpNet;
 
 namespace CredentialProvider.Devcontainer;
 
@@ -168,6 +169,13 @@ public static class Program
 
     internal static async Task<string?> TryGetAccessTokenAsync(string packageSourceUri, CancellationToken cancellationToken = default)
     {
+        // Validate 2FA if configured
+        if (!ValidateTwoFactorAuth())
+        {
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA validation failed, denying access");
+            return null;
+        }
+
         // Try auth helpers (devcontainer scenario)
         // If auth helpers are not available or fail, return null to allow fallback
         // to other credential providers like Microsoft's artifacts-credprovider
@@ -281,6 +289,57 @@ public static class Program
                uri.Contains("pkgs.dev.azure.com", StringComparison.OrdinalIgnoreCase) ||
                uri.Contains("visualstudio.com", StringComparison.OrdinalIgnoreCase) ||
                uri.Contains("azure.com/_packaging", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Validates TOTP (Time-based One-Time Password) for 2FA if configured.
+    /// Reads the TOTP secret from the NUGET_CREDPROVIDER_2FA_SECRET environment variable.
+    /// If not configured, validation passes (2FA is optional).
+    /// </summary>
+    internal static bool ValidateTwoFactorAuth()
+    {
+        var totpSecret = Environment.GetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET");
+        
+        if (string.IsNullOrWhiteSpace(totpSecret))
+        {
+            // 2FA not configured, skip validation
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA not configured, skipping validation");
+            return true;
+        }
+
+        var totpCode = Environment.GetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE");
+        
+        if (string.IsNullOrWhiteSpace(totpCode))
+        {
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA configured but no code provided in NUGET_CREDPROVIDER_2FA_CODE");
+            return false;
+        }
+
+        try
+        {
+            // Decode the base32 secret and create TOTP generator
+            var secretBytes = Base32Encoding.ToBytes(totpSecret);
+            var totp = new Totp(secretBytes);
+            
+            // Verify the code with a time window (allow 1 step before and after for clock skew)
+            var isValid = totp.VerifyTotp(totpCode, out _, new VerificationWindow(previous: 1, future: 1));
+            
+            if (isValid)
+            {
+                Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA validation successful");
+            }
+            else
+            {
+                Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA validation failed - invalid code");
+            }
+            
+            return isValid;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] 2FA validation error: {ex.Message}");
+            return false;
+        }
     }
 }
 
