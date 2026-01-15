@@ -108,19 +108,20 @@ Optional TOTP-based 2FA support using authenticator apps (Google Authenticator, 
 
 **Setup:**
 
-1. Generate a TOTP secret (or use an existing one from your authenticator app):
+1. Generate a TOTP secret using your authenticator app (recommended):
+   - Open your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, etc.)
+   - Add a new account - the app will generate a secret for you
+   - Save/copy the Base32-encoded secret shown during setup
+   
+   Alternatively, generate a secret manually:
 
 ```bash
 # Generate a random base32 secret (Linux/macOS)
 python3 -c "import base64, os; print(base64.b32encode(os.urandom(20)).decode('utf-8'))"
-
-# Or use an online TOTP secret generator (Windows/any platform)
-# Search for "TOTP secret generator" or use your authenticator app's setup wizard
-# Many authenticator apps can generate the secret for you automatically
 ```
 
-2. Add the secret to your authenticator app:
-   - Scan QR code or manually enter the secret
+2. Add the secret to your authenticator app (if not already done):
+   - Manually enter the Base32 secret in your app
    - The app will generate 6-digit codes every 30 seconds
 
 3. Set environment variables in your devcontainer:
