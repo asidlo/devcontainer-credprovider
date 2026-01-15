@@ -44,3 +44,5 @@ publish/
 
 # Windows
 Thumbs.db
+
+coverage/
