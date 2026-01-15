@@ -114,8 +114,9 @@ Optional TOTP-based 2FA support using authenticator apps (Google Authenticator, 
 # Generate a random base32 secret (Linux/macOS)
 python3 -c "import base64, os; print(base64.b32encode(os.urandom(20)).decode('utf-8'))"
 
-# Or using PowerShell (Windows)
-[Convert]::ToBase64String((1..20 | ForEach-Object { Get-Random -Maximum 256 }))
+# Or use an online TOTP secret generator (Windows/any platform)
+# Search for "TOTP secret generator" or use your authenticator app's setup wizard
+# Many authenticator apps can generate the secret for you automatically
 ```
 
 2. Add the secret to your authenticator app:
