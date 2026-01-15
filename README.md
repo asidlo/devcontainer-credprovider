@@ -108,17 +108,32 @@ Optional TOTP-based 2FA support using authenticator apps (Google Authenticator, 
 
 **Setup:**
 
-1. Generate a TOTP secret (or use an existing one from your authenticator app)
-2. Set environment variables in your devcontainer:
+1. Generate a TOTP secret (or use an existing one from your authenticator app):
+
+```bash
+# Generate a random base32 secret (Linux/macOS)
+python3 -c "import base64, os; print(base64.b32encode(os.urandom(20)).decode('utf-8'))"
+
+# Or using PowerShell (Windows)
+[Convert]::ToBase64String((1..20 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+2. Add the secret to your authenticator app:
+   - Scan QR code or manually enter the secret
+   - The app will generate 6-digit codes every 30 seconds
+
+3. Set environment variables in your devcontainer:
 
 ```json
 {
   "remoteEnv": {
-    "NUGET_CREDPROVIDER_2FA_SECRET": "YOUR_BASE32_ENCODED_SECRET",
+    "NUGET_CREDPROVIDER_2FA_SECRET": "JBSWY3DPEHPK3PXP",
     "NUGET_CREDPROVIDER_2FA_CODE": "123456"
   }
 }
 ```
+
+4. Before running `dotnet restore`, update `NUGET_CREDPROVIDER_2FA_CODE` with the current code from your authenticator app
 
 **Environment Variables:**
 
