@@ -1,14 +1,16 @@
-// NuGet Credential Provider Plugin for Azure Artifacts
+// NuGet Credential Provider Plugin for Devcontainers
 // Uses NuGet.Protocol library for proper plugin protocol handling
 // See: https://github.com/NuGet/Home/wiki/NuGet-cross-plat-authentication-plugin
+//
+// This plugin only uses auth helpers (ado-auth-helper, azure-auth-helper).
+// If auth helpers are not available or fail, it returns NotApplicable to allow
+// fallback to other credential providers like Microsoft's artifacts-credprovider.
 
 using System.Diagnostics;
 using System.Reflection;
-using Azure.Core;
-using Azure.Identity;
 using NuGet.Protocol.Plugins;
 
-namespace AzureArtifacts.CredentialProvider;
+namespace CredentialProvider.Devcontainer;
 
 public static class Program
 {
@@ -20,13 +22,11 @@ public static class Program
         "/usr/local/bin/azure-auth-helper"
     ];
 
-    private const string AzureDevOpsScope = "499b84ac-1321-427f-aa17-267ca6975798/.default";
-
     /// <summary>
     /// Gets the version from the assembly's InformationalVersion attribute (set by MinVer).
     /// Format: "1.2.3" for tagged releases, "1.2.4-alpha.0.5+abc1234" for untagged commits.
     /// </summary>
-    private static string GetVersion()
+    internal static string GetVersion()
     {
         var assembly = Assembly.GetExecutingAssembly();
         var infoVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
@@ -44,19 +44,19 @@ public static class Program
         // Handle standalone mode for testing
         if (args.Contains("--version") || args.Contains("-v"))
         {
-            Console.WriteLine($"CredentialProvider.AzureArtifacts {GetVersion()}");
+            Console.WriteLine($"CredentialProvider.Devcontainer {GetVersion()}");
             return 0;
         }
 
         if (args.Contains("--help") || args.Contains("-h"))
         {
-            Console.WriteLine($"AzureArtifacts.CredentialProvider v{GetVersion()}");
-            Console.WriteLine("NuGet Credential Provider for Azure Artifacts");
+            Console.WriteLine($"Devcontainer.CredentialProvider v{GetVersion()}");
+            Console.WriteLine("NuGet Credential Provider for Devcontainers");
             Console.WriteLine();
             Console.WriteLine("Usage:");
-            Console.WriteLine("  CredentialProvider.AzureArtifacts -Plugin     Run as NuGet plugin");
-            Console.WriteLine("  CredentialProvider.AzureArtifacts --test      Test credential acquisition");
-            Console.WriteLine("  CredentialProvider.AzureArtifacts --version   Show version info");
+            Console.WriteLine("  CredentialProvider.Devcontainer -Plugin     Run as NuGet plugin");
+            Console.WriteLine("  CredentialProvider.Devcontainer --test      Test credential acquisition");
+            Console.WriteLine("  CredentialProvider.Devcontainer --version   Show version info");
             Console.WriteLine();
             return 0;
         }
@@ -70,9 +70,9 @@ public static class Program
         return 1;
     }
 
-    private static async Task<int> TestCredentialsAsync()
+    internal static async Task<int> TestCredentialsAsync()
     {
-        Console.WriteLine($"CredentialProvider.AzureArtifacts v{GetVersion()}");
+        Console.WriteLine($"CredentialProvider.Devcontainer v{GetVersion()}");
         Console.WriteLine("Testing credential acquisition...");
 
         var token = await TryGetAccessTokenAsync("https://pkgs.dev.azure.com/test/");
@@ -89,7 +89,7 @@ public static class Program
 
     private static async Task<int> RunAsPluginAsync()
     {
-        Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin starting...");
+        Console.Error.WriteLine("[CredentialProvider.Devcontainer] Plugin starting...");
 
         try
         {
@@ -106,7 +106,7 @@ public static class Program
             // Use default connection options
             var options = ConnectionOptions.CreateDefault();
 
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Initializing plugin connection...");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Initializing plugin connection...");
 
             // Create plugin using the official NuGet.Protocol factory
             // This handles all the complex bidirectional handshake
@@ -124,19 +124,19 @@ public static class Program
                 options,
                 cts.Token);
 
-            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Plugin connected, protocol version: {plugin.Connection.ProtocolVersion}");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Plugin connected, protocol version: {plugin.Connection.ProtocolVersion}");
 
             // Listen for connection faults (NuGet client disconnect)
             var connectionClosed = new TaskCompletionSource<bool>();
             plugin.Connection.Faulted += (sender, args) =>
             {
-                Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Connection faulted: {args.Exception?.Message}");
+                Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Connection faulted: {args.Exception?.Message}");
                 connectionClosed.TrySetResult(true);
             };
 
             plugin.Closed += (sender, args) =>
             {
-                Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin closed by client");
+                Console.Error.WriteLine("[CredentialProvider.Devcontainer] Plugin closed by client");
                 connectionClosed.TrySetResult(true);
             };
 
@@ -153,7 +153,7 @@ public static class Program
                 // Expected when Ctrl+C pressed
             }
 
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Plugin shutting down...");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Plugin shutting down...");
             
             // Dispose is handled by 'using' statement above
 
@@ -161,41 +161,28 @@ public static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Plugin error: {ex}");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Plugin error: {ex}");
             return 1;
         }
     }
 
     internal static async Task<string?> TryGetAccessTokenAsync(string packageSourceUri, CancellationToken cancellationToken = default)
     {
-        // 1. Check environment variable first
-        var envToken = Environment.GetEnvironmentVariable("VSS_NUGET_ACCESSTOKEN");
-        if (!string.IsNullOrEmpty(envToken))
-        {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Using token from VSS_NUGET_ACCESSTOKEN");
-            return envToken;
-        }
-
-        // 2. Try auth helpers (devcontainer scenario)
+        // Try auth helpers (devcontainer scenario)
+        // If auth helpers are not available or fail, return null to allow fallback
+        // to other credential providers like Microsoft's artifacts-credprovider
         var helperToken = await TryGetTokenFromAuthHelperAsync(cancellationToken);
         if (!string.IsNullOrEmpty(helperToken))
         {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Acquired token via auth helper");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Acquired token via auth helper");
             return helperToken;
         }
 
-        // 3. Try Azure.Identity (DefaultAzureCredential)
-        var identityToken = await TryGetTokenFromAzureIdentityAsync(cancellationToken);
-        if (!string.IsNullOrEmpty(identityToken))
-        {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Acquired token via Azure.Identity");
-            return identityToken;
-        }
-
+        Console.Error.WriteLine("[CredentialProvider.Devcontainer] Auth helper not available, returning NotApplicable to allow fallback to other providers");
         return null;
     }
 
-    private static async Task<string?> TryGetTokenFromAuthHelperAsync(CancellationToken cancellationToken = default)
+    internal static async Task<string?> TryGetTokenFromAuthHelperAsync(CancellationToken cancellationToken = default)
     {
         // Retry settings - auth helpers may take time to initialize after container start
         const int maxRetries = 3;
@@ -212,7 +199,7 @@ public static class Program
             {
                 try
                 {
-                    Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Trying auth helper: {helperPath} (attempt {attempt}/{maxRetries})");
+                    Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Trying auth helper: {helperPath} (attempt {attempt}/{maxRetries})");
 
                     using var process = new Process
                     {
@@ -250,30 +237,30 @@ public static class Program
                         // Token was empty or invalid - retry if we have attempts left
                         if (attempt < maxRetries)
                         {
-                            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper returned no token, retrying in {retryDelayMs}ms...");
+                            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Auth helper returned no token, retrying in {retryDelayMs}ms...");
                             await Task.Delay(retryDelayMs, cancellationToken);
                         }
                     }
                     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                     {
                         // Timeout - kill the process and retry
-                        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper timed out: {helperPath}");
+                        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Auth helper timed out: {helperPath}");
                         try { process.Kill(entireProcessTree: true); } catch { }
 
                         if (attempt < maxRetries)
                         {
-                            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Retrying in {retryDelayMs}ms...");
+                            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Retrying in {retryDelayMs}ms...");
                             await Task.Delay(retryDelayMs, cancellationToken);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Auth helper {helperPath} failed: {ex.Message}");
+                    Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Auth helper {helperPath} failed: {ex.Message}");
 
                     if (attempt < maxRetries)
                     {
-                        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Retrying in {retryDelayMs}ms...");
+                        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Retrying in {retryDelayMs}ms...");
                         await Task.Delay(retryDelayMs, cancellationToken);
                     }
                 }
@@ -281,40 +268,6 @@ public static class Program
         }
 
         return null;
-    }
-
-    private static async Task<string?> TryGetTokenFromAzureIdentityAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Trying Azure.Identity DefaultAzureCredential...");
-
-            var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
-            {
-                ExcludeManagedIdentityCredential = true, // Skip in dev scenarios for speed
-                ExcludeWorkloadIdentityCredential = true,
-            });
-
-            var tokenRequest = new TokenRequestContext([AzureDevOpsScope]);
-
-            // Use linked token with timeout
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
-            
-            var token = await credential.GetTokenAsync(tokenRequest, timeoutCts.Token);
-
-            return token.Token;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Azure.Identity timed out");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Azure.Identity failed: {ex.Message}");
-            return null;
-        }
     }
 
     internal static bool IsAzureDevOpsUri(string? uri)
@@ -347,7 +300,7 @@ internal sealed class GetOperationClaimsRequestHandler : IRequestHandler
         var payload = MessageUtilities.DeserializePayload<GetOperationClaimsRequest>(request);
         var packageSourceUri = payload?.PackageSourceRepository;
 
-        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] GetOperationClaims: '{packageSourceUri}'");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] GetOperationClaims: '{packageSourceUri}'");
 
         // When package source is null/empty, NuGet is asking for source-agnostic operations
         // Return Authentication to indicate we handle auth
@@ -358,17 +311,17 @@ internal sealed class GetOperationClaimsRequestHandler : IRequestHandler
         {
             // Source-agnostic query - we support Authentication generally
             claims.Add(OperationClaim.Authentication);
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Claiming Authentication (source-agnostic)");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Claiming Authentication (source-agnostic)");
         }
         else if (Program.IsAzureDevOpsUri(packageSourceUri))
         {
             // Source-specific query - we handle Azure DevOps feeds
             claims.Add(OperationClaim.Authentication);
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Claiming Authentication for Azure DevOps");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Claiming Authentication for Azure DevOps");
         }
         else
         {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Not claiming (not Azure DevOps)");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Not claiming (not Azure DevOps)");
         }
 
         var response = new GetOperationClaimsResponse(claims);
@@ -392,7 +345,7 @@ internal sealed class GetAuthenticationCredentialsRequestHandler : IRequestHandl
         var payload = MessageUtilities.DeserializePayload<GetAuthenticationCredentialsRequest>(request);
         var uri = payload?.Uri?.AbsoluteUri;
 
-        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] GetAuthenticationCredentials: {uri}, IsRetry={payload?.IsRetry}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] GetAuthenticationCredentials: {uri}, IsRetry={payload?.IsRetry}");
 
         if (string.IsNullOrEmpty(uri) || !Program.IsAzureDevOpsUri(uri))
         {
@@ -413,23 +366,25 @@ internal sealed class GetAuthenticationCredentialsRequestHandler : IRequestHandl
 
         if (string.IsNullOrEmpty(token))
         {
-            Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Failed to acquire credentials");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Auth helper not available, returning NotApplicable for fallback to other providers");
 
-            var errorResponse = new GetAuthenticationCredentialsResponse(
+            // Return NotApplicable to allow NuGet to try other credential providers
+            // (like Microsoft's artifacts-credprovider which supports device code flow)
+            var notApplicableResponse = new GetAuthenticationCredentialsResponse(
                 username: null,
                 password: null,
-                message: "Failed to acquire Azure DevOps access token. Please run 'az login' or ensure auth helpers are available.",
+                message: "Auth helper not available. Falling back to other credential providers.",
                 authenticationTypes: null,
-                responseCode: MessageResponseCode.Error);
+                responseCode: MessageResponseCode.NotFound);
 
-            await responseHandler.SendResponseAsync(request, errorResponse, cancellationToken);
+            await responseHandler.SendResponseAsync(request, notApplicableResponse, cancellationToken);
             return;
         }
 
-        Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Successfully acquired credentials");
+        Console.Error.WriteLine("[CredentialProvider.Devcontainer] Successfully acquired credentials");
 
         var successResponse = new GetAuthenticationCredentialsResponse(
-            username: "AzureArtifacts",
+            username: "DevcontainerCredProvider",
             password: token,
             message: null,
             authenticationTypes: new List<string> { "Basic" },
@@ -453,7 +408,7 @@ internal sealed class SetLogLevelRequestHandler : IRequestHandler
         CancellationToken cancellationToken)
     {
         var payload = MessageUtilities.DeserializePayload<SetLogLevelRequest>(request);
-        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] SetLogLevel: {payload?.LogLevel}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] SetLogLevel: {payload?.LogLevel}");
 
         var response = new SetLogLevelResponse(MessageResponseCode.Success);
         return responseHandler.SendResponseAsync(request, response, cancellationToken);
@@ -474,7 +429,7 @@ internal sealed class InitializeRequestHandler : IRequestHandler
         CancellationToken cancellationToken)
     {
         var payload = MessageUtilities.DeserializePayload<InitializeRequest>(request);
-        Console.Error.WriteLine($"[CredentialProvider.AzureArtifacts] Initialize: ClientVersion={payload?.ClientVersion}, Culture={payload?.Culture}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Initialize: ClientVersion={payload?.ClientVersion}, Culture={payload?.Culture}");
 
         // Update connection timeout if provided
         if (payload?.RequestTimeout != null)
@@ -500,7 +455,7 @@ internal sealed class CloseRequestHandler : IRequestHandler
         IResponseHandler responseHandler,
         CancellationToken cancellationToken)
     {
-        Console.Error.WriteLine("[CredentialProvider.AzureArtifacts] Close request received");
+        Console.Error.WriteLine("[CredentialProvider.Devcontainer] Close request received");
 
         // Acknowledge the close request
         // The plugin will exit after responding

@@ -17,15 +17,15 @@ Thanks for your interest in contributing!
 ### Build
 
 ```bash
-dotnet restore src/CredentialProvider.AzureArtifacts
-dotnet build src/CredentialProvider.AzureArtifacts -c Release
+dotnet restore src/CredentialProvider.Devcontainer
+dotnet build src/CredentialProvider.Devcontainer -c Release
 ```
 
 ### Run (standalone)
 
 ```bash
-dotnet run --project src/CredentialProvider.AzureArtifacts -- --version
-dotnet run --project src/CredentialProvider.AzureArtifacts -- --test
+dotnet run --project src/CredentialProvider.Devcontainer -- --version
+dotnet run --project src/CredentialProvider.Devcontainer -- --test
 ```
 
 ### Install locally (Linux/macOS)

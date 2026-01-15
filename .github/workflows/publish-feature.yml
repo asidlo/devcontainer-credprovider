@@ -45,20 +45,20 @@ jobs:
       - name: Build credential provider
         id: build
         run: |
-          dotnet restore src/CredentialProvider.AzureArtifacts
-          dotnet publish src/CredentialProvider.AzureArtifacts \
+          dotnet restore src/CredentialProvider.Devcontainer
+          dotnet publish src/CredentialProvider.Devcontainer \
             -c Release \
             -o ./publish/netcore
           
           # Extract version from the built assembly (set by MinVer)
-          VERSION=$(dotnet ./publish/netcore/CredentialProvider.AzureArtifacts.dll --version | awk '{print $2}' | cut -d'+' -f1)
+          VERSION=$(dotnet ./publish/netcore/CredentialProvider.Devcontainer.dll --version | awk '{print $2}' | cut -d'+' -f1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Credential Provider Version: $VERSION"
 
       - name: Embed binaries in feature
         run: |
           # Create the binaries directory inside the feature
-          FEATURE_DIR=".devcontainer-feature/src/devcontainer-feature"
+          FEATURE_DIR=".devcontainer-feature/src/devcontainer-credprovider"
           mkdir -p "$FEATURE_DIR/netcore"
           
           # Copy the built credential provider binaries
@@ -93,7 +93,7 @@ jobs:
           cd .devcontainer-feature
           devcontainer features publish \
             --registry ghcr.io \
-            --namespace asidlo/credentialprovider-azureartifacts \
+            --namespace asidlo/features \
             ./src
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +110,7 @@ jobs:
           echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
           echo "{" >> $GITHUB_STEP_SUMMARY
           echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
-          echo "    \"ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1\": {}" >> $GITHUB_STEP_SUMMARY
+          echo "    \"ghcr.io/asidlo/features/devcontainer-credprovider:1\": {}" >> $GITHUB_STEP_SUMMARY
           echo "  }" >> $GITHUB_STEP_SUMMARY
           echo "}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -120,7 +120,7 @@ jobs:
           echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
           echo "{" >> $GITHUB_STEP_SUMMARY
           echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
-          echo "    \"ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:$VERSION\": {}" >> $GITHUB_STEP_SUMMARY
+          echo "    \"ghcr.io/asidlo/features/devcontainer-credprovider:$VERSION\": {}" >> $GITHUB_STEP_SUMMARY
           echo "  }" >> $GITHUB_STEP_SUMMARY
           echo "}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

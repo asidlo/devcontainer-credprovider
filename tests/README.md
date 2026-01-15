@@ -1,18 +1,17 @@
 # Tests
 
-This directory contains comprehensive tests for the Azure Artifacts Credential Provider.
+This directory contains comprehensive tests for the Devcontainer Credential Provider.
 
 ## Test Coverage
 
 ### Unit and Integration Tests (C# with xUnit)
 
-Located in `CredentialProvider.AzureArtifacts.Tests/`
+Located in `CredentialProvider.Devcontainer.Tests/`
 
 All tests are implemented in C# using xUnit for better CI/CD integration and cross-platform support.
 
 #### Authentication Tests (`AuthenticationTests.cs`)
-- VSS_NUGET_ACCESSTOKEN environment variable authentication
-- Auth helper fallback behavior
+- Auth helper authentication
 - Azure.Identity DefaultAzureCredential fallback
 - Cancellation handling for async operations
 - Azure DevOps URI detection (8 test cases)
@@ -24,7 +23,6 @@ All tests are implemented in C# using xUnit for better CI/CD integration and cro
 - Concurrent request handling
 - Cancellation and timeout scenarios
 - Edge case validation
-- Environment variable change handling
 
 #### NuGet Plugin Integration Tests (`NuGetPluginIntegrationTests.cs`)
 - Plugin startup and initialization
@@ -44,7 +42,6 @@ All tests are implemented in C# using xUnit for better CI/CD integration and cro
 - End-to-end build and publish workflow
 - Install script execution
 - Plugin version and help display
-- Token acquisition with environment variable
 - Graceful failure handling
 - Devcontainer feature installation
 - File permissions and structure validation
@@ -116,7 +113,7 @@ See "Run Tests with Code Coverage" section above for local coverage generation.
 
 ✅ Installation process works as expected  
 ✅ Devcontainer install works as expected  
-✅ All auth methods work (env var, auth helpers, Azure.Identity)  
+✅ All auth methods work (auth helpers, Azure.Identity)  
 ✅ Auth fallbacks are being used  
 ✅ NuGet plugin protocol integration  
 ✅ URI detection for Azure DevOps feeds  

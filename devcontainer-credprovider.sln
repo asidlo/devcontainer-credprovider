@@ -5,11 +5,11 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CredentialProvider.AzureArtifacts", "src\CredentialProvider.AzureArtifacts\CredentialProvider.AzureArtifacts.csproj", "{EC722C7A-1D4B-86AD-8368-7E62F41FB3A7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CredentialProvider.Devcontainer", "src\CredentialProvider.Devcontainer\CredentialProvider.Devcontainer.csproj", "{EC722C7A-1D4B-86AD-8368-7E62F41FB3A7}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CredentialProvider.AzureArtifacts.Tests", "tests\CredentialProvider.AzureArtifacts.Tests\CredentialProvider.AzureArtifacts.Tests.csproj", "{5500E344-6A4C-461D-A248-C59587EDB409}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CredentialProvider.Devcontainer.Tests", "tests\CredentialProvider.Devcontainer.Tests\CredentialProvider.Devcontainer.Tests.csproj", "{5500E344-6A4C-461D-A248-C59587EDB409}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

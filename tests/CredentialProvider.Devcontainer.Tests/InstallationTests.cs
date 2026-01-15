@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace CredentialProvider.AzureArtifacts.Tests;
+namespace CredentialProvider.Devcontainer.Tests;
 
 /// <summary>
 /// Integration tests for installation process
@@ -16,17 +16,17 @@ public class InstallationTests
     {
         _tempTestDir = Path.Combine(Path.GetTempPath(), $"credprovider-test-{Guid.NewGuid()}");
         _homeDir = Path.Combine(_tempTestDir, "home");
-        _pluginDir = Path.Combine(_homeDir, ".nuget", "plugins", "netcore", "CredentialProvider.AzureArtifacts");
+        _pluginDir = Path.Combine(_homeDir, ".nuget", "plugins", "netcore", "CredentialProvider.Devcontainer");
         
         Directory.CreateDirectory(_tempTestDir);
         Directory.CreateDirectory(_homeDir);
     }
 
     [Fact]
-    public async Task InstallScript_CreatesPluginDirectory()
+    public void InstallScript_CreatesPluginDirectory()
     {
         // This test verifies the installation directory structure
-        var pluginDestination = Path.Combine(_homeDir, ".nuget", "plugins", "netcore", "CredentialProvider.AzureArtifacts");
+        var pluginDestination = Path.Combine(_homeDir, ".nuget", "plugins", "netcore", "CredentialProvider.Devcontainer");
         
         // Act
         Directory.CreateDirectory(pluginDestination);
@@ -77,7 +77,7 @@ public class InstallationTests
             return;
         }
 
-        var dllPath = Path.Combine(repoRoot, "src", "CredentialProvider.AzureArtifacts", "bin", "Debug", "net8.0", "CredentialProvider.AzureArtifacts.dll");
+        var dllPath = Path.Combine(repoRoot, "src", "CredentialProvider.Devcontainer", "bin", "Debug", "net8.0", "CredentialProvider.Devcontainer.dll");
         
         if (!File.Exists(dllPath))
         {
@@ -90,7 +90,7 @@ public class InstallationTests
 
         // Assert
         Assert.Equal(0, result.ExitCode);
-        Assert.Contains("CredentialProvider.AzureArtifacts", result.Output);
+        Assert.Contains("CredentialProvider.Devcontainer", result.Output);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class InstallationTests
         var repoRoot = FindRepositoryRoot();
         if (repoRoot == null) return;
 
-        var dllPath = Path.Combine(repoRoot, "src", "CredentialProvider.AzureArtifacts", "bin", "Debug", "net8.0", "CredentialProvider.AzureArtifacts.dll");
+        var dllPath = Path.Combine(repoRoot, "src", "CredentialProvider.Devcontainer", "bin", "Debug", "net8.0", "CredentialProvider.Devcontainer.dll");
         if (!File.Exists(dllPath)) return;
 
         // Act
@@ -118,7 +118,7 @@ public class InstallationTests
         var current = Directory.GetCurrentDirectory();
         while (current != null)
         {
-            if (File.Exists(Path.Combine(current, "credentialprovider-azureartifacts.sln")))
+            if (File.Exists(Path.Combine(current, "devcontainer-credprovider.sln")))
             {
                 return current;
             }

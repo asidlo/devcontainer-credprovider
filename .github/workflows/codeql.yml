@@ -34,7 +34,7 @@ jobs:
           dotnet-version: 8.x
 
       - name: Build
-        run: dotnet build src/CredentialProvider.AzureArtifacts -c Release
+        run: dotnet build src/CredentialProvider.Devcontainer -c Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

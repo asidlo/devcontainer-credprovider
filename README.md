@@ -1,8 +1,6 @@
-# Azure Artifacts Silent Credential Provider
+# Devcontainer Credential Provider
 
-[![Build & Test](https://github.com/asidlo/credentialprovider-azureartifacts/actions/workflows/build.yml/badge.svg)](https://github.com/asidlo/credentialprovider-azureartifacts/actions/workflows/build.yml)
-
-A silent/headless NuGet credential provider for Azure Artifacts that authenticates **without interactive prompts** - perfect for devcontainers, codespaces, and CI environments.
+A silent/headless NuGet credential provider for devcontainers and container environments that authenticates **without interactive prompts** - perfect for devcontainers, codespaces, and CI environments.
 
 ## Why This Exists
 
@@ -14,9 +12,8 @@ Microsoft's official [artifacts-credprovider](https://github.com/microsoft/artif
 
 This credential provider authenticates silently using:
 
-1. **Environment variable** (`VSS_NUGET_ACCESSTOKEN`) - if already set
-2. **Auth helper** (`~/ado-auth-helper`) - from devcontainer features
-3. **Azure.Identity** (`DefaultAzureCredential`) - Azure CLI, managed identity, etc.
+1. **Auth helpers** (`~/ado-auth-helper`) - from devcontainer features
+2. **Fallback to artifacts-credprovider** - for device code flow when auth helpers are unavailable
 
 ## Prerequisites
 
@@ -30,20 +27,20 @@ Download and install from GitHub releases using the GitHub CLI:
 **Linux/macOS:**
 
 ```bash
-gh release download -R asidlo/credentialprovider-azureartifacts -p "*.tar.gz" \
+gh release download -R asidlo/devcontainer-credprovider -p "*.tar.gz" \
   && mkdir -p /tmp/cred-provider \
-  && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
+  && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
   && /tmp/cred-provider/install.sh \
-  && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
+  && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-gh release download -R asidlo/credentialprovider-azureartifacts -p "*.zip"
-Expand-Archive -Path "credentialprovider-azureartifacts.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
+gh release download -R asidlo/devcontainer-credprovider -p "*.zip"
+Expand-Archive -Path "devcontainer-credprovider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
 & "$env:TEMP\cred-provider\install.ps1"
-Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "credentialprovider-azureartifacts.zip"
+Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "devcontainer-credprovider.zip"
 ```
 
 After installation, just run `dotnet restore` - no environment variables needed!
@@ -52,10 +49,10 @@ After installation, just run `dotnet restore` - no environment variables needed!
 
 ```bash
 # Check version
-dotnet ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll --version
+dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer.dll --version
 
 # Test credential acquisition
-dotnet ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll --test
+dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer.dll --test
 ```
 
 ## Release Verification
@@ -75,39 +72,18 @@ Verify Sigstore signatures (requires `cosign`):
 
 ```bash
 cosign verify-blob \
-  --signature credentialprovider-azureartifacts.tar.gz.sig \
-  --certificate credentialprovider-azureartifacts.tar.gz.cert \
-  credentialprovider-azureartifacts.tar.gz
+  --signature devcontainer-credprovider.tar.gz.sig \
+  --certificate devcontainer-credprovider.tar.gz.cert \
+  devcontainer-credprovider.tar.gz
 ```
 
 ## Building from Source
 
 ```bash
-git clone https://github.com/asidlo/credentialprovider-azureartifacts.git
-cd credentialprovider-azureartifacts
+git clone https://github.com/asidlo/devcontainer-credprovider.git
+cd devcontainer-credprovider
 ./scripts/test-local-install.sh
 ```
-
-## Running Tests
-
-This project includes comprehensive tests for installation, authentication, and NuGet plugin integration:
-
-```bash
-# Run all tests
-dotnet test
-
-# Run tests with coverage
-dotnet test --collect:"XPlat Code Coverage"
-
-# Run specific test categories
-dotnet test --filter "FullyQualifiedName~AuthenticationTests"
-dotnet test --filter "FullyQualifiedName~NuGetPluginIntegrationTests"
-dotnet test --filter "FullyQualifiedName~IdentityHandlingTests"
-```
-
-See [tests/README.md](tests/README.md) for detailed information about test coverage (59 tests covering all authentication methods, plugin integration, and installation scenarios).
-
-**Coverage**: The CI/CD pipeline automatically generates code coverage reports for every build and PR. Coverage reports are published as build artifacts and summarized in PR comments.
 
 ## How It Works
 
@@ -116,19 +92,14 @@ This is a **NuGet credential provider plugin** that NuGet automatically calls wh
 1. Implements the NuGet plugin protocol using the official `NuGet.Protocol` library
 2. Handles bidirectional JSON-RPC communication with NuGet
 3. Returns credentials silently without prompting the user
+4. Falls back to other providers (like artifacts-credprovider) if auth helpers are unavailable
 
 ### Authentication Flow
 
 When NuGet requests credentials for an Azure Artifacts feed:
 
-1. **Check `VSS_NUGET_ACCESSTOKEN`** - Uses it directly if set
-2. **Try auth helper** - Runs `~/ado-auth-helper get-access-token`
-3. **Fall back to Azure.Identity** - Uses `DefaultAzureCredential` which tries:
-   - Azure CLI (`az login`)
-   - Azure PowerShell
-   - Visual Studio credentials
-   - Environment variables
-   - Managed Identity (in Azure)
+1. **Try auth helpers** - Runs `~/ado-auth-helper get-access-token`
+2. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
 
 ## Devcontainer Feature (Recommended)
 
@@ -137,44 +108,41 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
+    "ghcr.io/asidlo/features/devcontainer-credprovider:2": {}
   }
 }
 ```
 
-### With Specific Version
-
-```json
-{
-  "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {
-      "version": "v1.0.5"
-    }
-  }
-}
-```
+The feature automatically:
+- Installs the devcontainer credential provider to `/usr/local/share/nuget/plugins/custom/`
+- Installs Microsoft's artifacts-credprovider to `/usr/local/share/nuget/plugins/azure/`
+- Sets `NUGET_PLUGIN_PATH` so both CLI and C# DevKit can find the providers
 
 ## Troubleshooting
 
 ### Check if provider is installed
 
 ```bash
-ls -la ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/
+# Check devcontainer provider
+ls -la /usr/local/share/nuget/plugins/custom/
+
+# Check artifacts-credprovider fallback
+ls -la /usr/local/share/nuget/plugins/azure/
 ```
 
 ### C# DevKit Integration
 
-If C# DevKit is prompting for device code authentication instead of using the credential provider, add this to your devcontainer.json:
+The feature automatically sets `NUGET_PLUGIN_PATH` so C# DevKit will use the credential providers. No additional configuration needed.
+
+If you're not using the devcontainer feature and need to configure manually:
 
 ```json
 {
   "remoteEnv": {
-    "NUGET_PLUGIN_PATHS": "${containerEnv:HOME}/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll"
+    "NUGET_PLUGIN_PATH": "/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/plugins/azure"
   }
 }
 ```
-
-This explicitly tells NuGet (and C# DevKit) to use this credential provider.
 
 ### Enable verbose NuGet logging
 
@@ -189,7 +157,7 @@ cat /tmp/nuget-logs/*.log
 ~/ado-auth-helper get-access-token
 ```
 
-### Test Azure CLI
+### Test Azure CLI (for artifacts-credprovider fallback)
 
 ```bash
 az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
@@ -198,7 +166,14 @@ az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --qu
 ### Uninstall
 
 ```bash
-rm -rf ~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts
+# Remove devcontainer provider
+rm -rf /usr/local/share/nuget/plugins/custom
+
+# Remove artifacts-credprovider fallback
+rm -rf /usr/local/share/nuget/plugins/azure
+
+# Remove environment configuration
+rm -f /etc/profile.d/nuget-credprovider.sh
 ```
 
 ## License

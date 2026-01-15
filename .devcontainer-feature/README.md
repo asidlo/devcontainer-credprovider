@@ -1,6 +1,6 @@
-# Azure Artifacts Credential Provider - Devcontainer Feature
+# Devcontainer Credential Provider - Devcontainer Feature
 
-This folder contains a [devcontainer feature](https://containers.dev/implementors/features/) that installs the Azure Artifacts silent credential provider.
+This folder contains a [devcontainer feature](https://containers.dev/implementors/features/) that installs the Devcontainer silent credential provider.
 
 ## Usage
 
@@ -9,29 +9,25 @@ Add this feature to your `devcontainer.json`:
 ```json
 {
   "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
+    "ghcr.io/asidlo/features/devcontainer-credprovider:2": {}
   }
 }
 ```
 
-No additional options or authentication required - the credential provider binaries are embedded in the feature package.
+No additional configuration required - the credential provider binaries are embedded in the feature package.
 
-## C# DevKit Integration
+## How It Works
 
-For C# DevKit to use this credential provider instead of device code flow, add the following to your `devcontainer.json`:
+This feature installs two credential providers:
 
-```json
-{
-  "features": {
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
-  },
-  "remoteEnv": {
-    "NUGET_PLUGIN_PATHS": "${containerEnv:HOME}/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/CredentialProvider.AzureArtifacts.dll"
-  }
-}
+1. **Devcontainer Credential Provider** (this plugin) - Uses auth helpers for silent authentication
+2. **Microsoft artifacts-credprovider** - Fallback for device code flow when auth helpers are unavailable
+
+The `NUGET_PLUGIN_PATH` is automatically set to check the devcontainer provider first, then fall back to artifacts-credprovider:
+
+```bash
+NUGET_PLUGIN_PATH="/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/plugins/azure"
 ```
-
-This explicitly tells NuGet (and C# DevKit's Roslyn language server) where to find the credential provider.
 
 ## Requirements
 
@@ -41,29 +37,25 @@ This explicitly tells NuGet (and C# DevKit's Roslyn language server) where to fi
 {
   "features": {
     "ghcr.io/devcontainers/features/dotnet:2": {},
-    "ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature:1": {}
+    "ghcr.io/asidlo/features/devcontainer-credprovider:2": {}
   }
 }
 ```
 
 ## What It Does
 
-1. Copies the embedded credential provider binaries
-2. Installs to `~/.nuget/plugins/netcore/CredentialProvider.AzureArtifacts/`
-3. Configures NuGet environment variables for non-interactive authentication
-4. Verifies the installation
+1. Installs the devcontainer credential provider to `/usr/local/share/nuget/plugins/custom/`
+2. Installs Microsoft's artifacts-credprovider to `/usr/local/share/nuget/plugins/azure/`
+3. Configures `NUGET_PLUGIN_PATH` to use both providers (via `containerEnv`)
+4. Configures NuGet environment variables for non-interactive authentication
+5. Verifies the installation
 
-After installation, `dotnet restore` will automatically use this credential provider for Azure Artifacts feeds.
+After installation, `dotnet restore` will automatically use this credential provider for Azure Artifacts feeds. C# DevKit will also use this credential provider.
 
-## How It Works
+## Authentication Flow
 
-Unlike features that download at install time, this feature embeds the credential provider binaries directly in the OCI package. This means:
-
-- ✅ Works with private repositories (no GitHub auth needed during container build)
-- ✅ No network requests during feature installation
-- ✅ Faster installation
-
-The feature is built and published by the `publish-feature.yml` workflow, which compiles the credential provider and embeds it in the feature before publishing to GHCR.
+1. **Try auth helpers** - Runs `~/ado-auth-helper` or `/usr/local/bin/ado-auth-helper`
+2. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns NotApplicable and NuGet tries the next provider (Microsoft's artifacts-credprovider with device code flow)
 
 ## Publishing the Feature
 
@@ -71,11 +63,11 @@ To publish this feature to GHCR, run the `Publish Devcontainer Feature` workflow
 
 1. Build the credential provider from source
 2. Embed the binaries into the feature
-3. Publish to `ghcr.io/asidlo/credentialprovider-azureartifacts/devcontainer-feature`
+3. Publish to `ghcr.io/asidlo/features/devcontainer-credprovider`
 
 ## Testing
 
 ```bash
 cd .devcontainer-feature
-devcontainer features test -f devcontainer-feature
+devcontainer features test -f devcontainer-credprovider
 ```
