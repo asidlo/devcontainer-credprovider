@@ -1,0 +1,12 @@
+# Code Owners - require review for security-sensitive changes
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything
+* @asidlo
+
+# Security-sensitive files require explicit review
+/.github/workflows/ @asidlo
+/scripts/ @asidlo
+/src/CredentialProvider.Devcontainer/Program.cs @asidlo
+/.devcontainer-feature/src/devcontainer-credprovider/install.sh @asidlo
+SECURITY.md @asidlo
