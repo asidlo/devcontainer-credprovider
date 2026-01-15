@@ -11,7 +11,9 @@ set -e
 echo "Installing Devcontainer Credential Provider..."
 
 # Fixed installation directories
-PLUGIN_INSTALL_DIR="/usr/local/share/nuget/plugins/custom"
+# NuGet discovers plugins by scanning for CredentialProvider.*/ subdirectories
+PLUGIN_BASE_DIR="/usr/local/share/nuget/plugins/custom"
+PLUGIN_INSTALL_DIR="$PLUGIN_BASE_DIR/CredentialProvider.Devcontainer"
 AZURE_PLUGIN_DIR="/usr/local/share/nuget/plugins/azure"
 
 # Get the directory where this script is located (contains embedded binaries)
@@ -58,21 +60,30 @@ fi
 echo ""
 echo "Installing Microsoft artifacts-credprovider as fallback..."
 
-AZURE_CREDPROVIDER_SCRIPT_URL="https://raw.githubusercontent.com/microsoft/artifacts-credprovider/master/helpers/installcredprovider.sh"
+# The upstream install script hardcodes $HOME/.nuget/, so we download directly
+AZURE_CREDPROVIDER_URL="https://github.com/Microsoft/artifacts-credprovider/releases/latest/download/Microsoft.Net6.NuGet.CredentialProvider.tar.gz"
 
 # Create Azure plugin directory
 mkdir -p "$AZURE_PLUGIN_DIR"
 
-# Download and run Microsoft's install script with custom install dir
 if command -v curl &>/dev/null; then
-    # Set the install location for Microsoft's credprovider
-    export NUGET_CREDENTIALPROVIDER_INSTALL_DIR="$AZURE_PLUGIN_DIR"
+    # Download and extract to temp, then move to target location
+    AZURE_TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $AZURE_TEMP_DIR" EXIT
     
-    # Download and execute the installer
-    if curl -fsSL "$AZURE_CREDPROVIDER_SCRIPT_URL" | bash -s -- -n 2>/dev/null; then
-        echo "✓ Microsoft artifacts-credprovider installed to $AZURE_PLUGIN_DIR"
+    echo "Downloading from $AZURE_CREDPROVIDER_URL"
+    if curl -fsSL "$AZURE_CREDPROVIDER_URL" | tar xz -C "$AZURE_TEMP_DIR" 2>/dev/null; then
+        # The tarball extracts to plugins/netcore/CredentialProvider.Microsoft/
+        if [ -d "$AZURE_TEMP_DIR/plugins/netcore/CredentialProvider.Microsoft" ]; then
+            rm -rf "$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+            cp -r "$AZURE_TEMP_DIR/plugins/netcore/CredentialProvider.Microsoft" "$AZURE_PLUGIN_DIR/"
+            chmod -R 755 "$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+            echo "✓ Microsoft artifacts-credprovider installed to $AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+        else
+            echo "⚠ Warning: Unexpected archive structure"
+        fi
     else
-        echo "⚠ Warning: Failed to install Microsoft artifacts-credprovider"
+        echo "⚠ Warning: Failed to download Microsoft artifacts-credprovider"
         echo "  Device code flow fallback will not be available"
     fi
 else

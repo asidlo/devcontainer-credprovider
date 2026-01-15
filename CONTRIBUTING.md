@@ -31,7 +31,11 @@ dotnet run --project src/CredentialProvider.Devcontainer -- --test
 ### Install locally (Linux/macOS)
 
 ```bash
-./scripts/test-local-install.sh
+# Build and install with tests
+RUN_TESTS=true ./scripts/install.sh
+
+# Install from GitHub release
+SOURCE=release ./scripts/install.sh
 ```
 
 ## Pull Requests

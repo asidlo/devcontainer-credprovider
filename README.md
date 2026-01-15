@@ -82,7 +82,7 @@ cosign verify-blob \
 ```bash
 git clone https://github.com/asidlo/devcontainer-credprovider.git
 cd devcontainer-credprovider
-./scripts/test-local-install.sh
+RUN_TESTS=true ./scripts/install.sh
 ```
 
 ## How It Works

@@ -2,95 +2,238 @@
 # Install the Devcontainer credential provider to the NuGet plugins folder
 #
 # Usage:
-#   From GitHub release:  curl -fsSL URL/credential-provider.tar.gz | tar xz && ./install.sh
-#   From NuGet package:   ~/.nuget/packages/azureartifacts.credentialprovider/1.0.0/tools/install.sh
-#   From source repo:     dotnet publish -c Release -o bin/publish && ./install.sh
+#   ./install.sh                              # Build locally and install
+#   SOURCE=release ./install.sh               # Download from latest GitHub release
+#   SOURCE=pr PR_NUMBER=123 ./install.sh      # Download from PR build artifact
+#   RUN_TESTS=true ./install.sh               # Build, install, and run tests
 #
 # Environment variables:
-#   PLUGIN_INSTALL_DIR - Override the installation directory (default: /usr/local/share/nuget/plugins/custom)
-#   SKIP_ARTIFACTS_CREDPROVIDER - Set to "true" to skip installing Microsoft's artifacts-credprovider
-#   SKIP_ENV_CONFIG - Set to "true" to skip configuring NUGET_PLUGIN_PATH
+#   SOURCE                      - Where to get binaries: "local" (default), "release", or "pr"
+#   PR_NUMBER                   - PR number when SOURCE=pr
+#   RELEASE_VERSION             - Release tag when SOURCE=release (default: latest)
+#   RUN_TESTS                   - Run verification tests after install (default: false)
+#   PLUGIN_INSTALL_DIR          - Override installation directory (default: /usr/local/share/nuget/plugins/custom)
+#   SKIP_ARTIFACTS_CREDPROVIDER - Skip installing Microsoft's artifacts-credprovider (default: false)
+#   SKIP_ENV_CONFIG             - Skip configuring NUGET_PLUGIN_PATH (default: false)
+#   GITHUB_REPO                 - GitHub repo for downloads (default: asidlo/devcontainer-credprovider)
 
 set -e
 
+# Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_INSTALL_DIR="${PLUGIN_INSTALL_DIR:-/usr/local/share/nuget/plugins/custom}"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)" || REPO_ROOT="$SCRIPT_DIR"
+SOURCE="${SOURCE:-local}"
+RUN_TESTS="${RUN_TESTS:-false}"
+GITHUB_REPO="${GITHUB_REPO:-asidlo/devcontainer-credprovider}"
+PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-/usr/local/share/nuget/plugins/custom}"
+PLUGIN_INSTALL_DIR="$PLUGIN_BASE_DIR/CredentialProvider.Devcontainer"
 AZURE_PLUGIN_DIR="/usr/local/share/nuget/plugins/azure"
 
-# Check for source in order of preference:
-# 1. Tarball extraction: netcore/ subfolder with .dll (new portable format)
-# 2. Tarball extraction: .dll in same directory as install.sh
-# 3. NuGet package structure: tools/netcore/CredentialProvider.Devcontainer/
-# 4. Local publish output: bin/publish/
-#
-# NOTE: NuGet plugin discovery REQUIRES a .dll file for netcore plugins.
-# Self-contained executables do NOT work with ~/.nuget/plugins/netcore/ discovery.
-# See: https://learn.microsoft.com/en-us/nuget/reference/extensibility/nuget-cross-platform-plugins
+# Temporary directory for downloads/builds
+WORK_DIR=$(mktemp -d)
+trap "rm -rf $WORK_DIR" EXIT
 
-if [ -f "$SCRIPT_DIR/netcore/CredentialProvider.Devcontainer.dll" ]; then
-  PLUGIN_SOURCE="$SCRIPT_DIR/netcore"
-elif [ -f "$SCRIPT_DIR/CredentialProvider.Devcontainer.dll" ]; then
-  PLUGIN_SOURCE="$SCRIPT_DIR"
-elif [ -d "$SCRIPT_DIR/netcore/CredentialProvider.Devcontainer" ]; then
-  PLUGIN_SOURCE="$SCRIPT_DIR/netcore/CredentialProvider.Devcontainer"
-elif [ -d "$SCRIPT_DIR/bin/publish" ]; then
-  PLUGIN_SOURCE="$SCRIPT_DIR/bin/publish"
-else
-  echo "ERROR: Cannot find credential provider binaries."
-  echo "Looking for:"
-  echo "  - $SCRIPT_DIR/netcore/CredentialProvider.Devcontainer.dll (tarball extraction)"
-  echo "  - $SCRIPT_DIR/CredentialProvider.Devcontainer.dll (flat extraction)"
-  echo "  - $SCRIPT_DIR/netcore/CredentialProvider.Devcontainer/ (NuGet package)"
-  echo "  - $SCRIPT_DIR/bin/publish/ (local build)"
-  echo ""
-  echo "If building from source, run: dotnet publish -c Release -o bin/publish"
+echo "=== Devcontainer Credential Provider - Install ==="
+echo ""
+echo "Source: $SOURCE"
+echo "Install directory: $PLUGIN_INSTALL_DIR"
+echo ""
+
+# Function to find plugin source from various locations
+find_plugin_source() {
+  local search_dir="$1"
+  
+  if [ -f "$search_dir/netcore/CredentialProvider.Devcontainer.dll" ]; then
+    echo "$search_dir/netcore"
+  elif [ -f "$search_dir/CredentialProvider.Devcontainer.dll" ]; then
+    echo "$search_dir"
+  elif [ -d "$search_dir/netcore/CredentialProvider.Devcontainer" ]; then
+    echo "$search_dir/netcore/CredentialProvider.Devcontainer"
+  else
+    echo ""
+  fi
+}
+
+# Get binaries based on SOURCE
+case "$SOURCE" in
+  local)
+    echo "1. Building from local source..."
+    
+    # Check if we're in a repo with source code
+    if [ -d "$REPO_ROOT/src/CredentialProvider.Devcontainer" ]; then
+      PUBLISH_DIR="$WORK_DIR/publish"
+      dotnet publish "$REPO_ROOT/src/CredentialProvider.Devcontainer" \
+        -c Release \
+        -o "$PUBLISH_DIR" \
+        --nologo
+      PLUGIN_SOURCE="$PUBLISH_DIR"
+      echo "   ✓ Built from source"
+    else
+      # Try to find pre-built binaries in common locations
+      PLUGIN_SOURCE=$(find_plugin_source "$SCRIPT_DIR")
+      if [ -z "$PLUGIN_SOURCE" ]; then
+        PLUGIN_SOURCE=$(find_plugin_source "$REPO_ROOT/bin/publish")
+      fi
+      
+      if [ -z "$PLUGIN_SOURCE" ]; then
+        echo "ERROR: Cannot find credential provider binaries."
+        echo "Either run from the repository root or set SOURCE=release to download."
+        exit 1
+      fi
+      echo "   ✓ Using pre-built binaries from $PLUGIN_SOURCE"
+    fi
+    ;;
+    
+  release)
+    echo "1. Downloading from GitHub release..."
+    
+    RELEASE_VERSION="${RELEASE_VERSION:-latest}"
+    
+    if ! command -v gh &>/dev/null && ! command -v curl &>/dev/null; then
+      echo "ERROR: Either 'gh' (GitHub CLI) or 'curl' is required for release downloads"
+      exit 1
+    fi
+    
+    cd "$WORK_DIR"
+    
+    if command -v gh &>/dev/null; then
+      if [ "$RELEASE_VERSION" = "latest" ]; then
+        gh release download -R "$GITHUB_REPO" -p "*.tar.gz"
+      else
+        gh release download "$RELEASE_VERSION" -R "$GITHUB_REPO" -p "*.tar.gz"
+      fi
+    else
+      # Fallback to curl
+      if [ "$RELEASE_VERSION" = "latest" ]; then
+        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/latest/download/devcontainer-credprovider.tar.gz"
+      else
+        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$RELEASE_VERSION/devcontainer-credprovider.tar.gz"
+      fi
+      curl -fsSL -o devcontainer-credprovider.tar.gz "$DOWNLOAD_URL"
+    fi
+    
+    tar xzf *.tar.gz
+    PLUGIN_SOURCE=$(find_plugin_source "$WORK_DIR")
+    
+    if [ -z "$PLUGIN_SOURCE" ]; then
+      echo "ERROR: Failed to find binaries in downloaded release"
+      exit 1
+    fi
+    echo "   ✓ Downloaded release ${RELEASE_VERSION}"
+    ;;
+    
+  pr)
+    echo "1. Downloading from PR build..."
+    
+    if [ -z "$PR_NUMBER" ]; then
+      echo "ERROR: PR_NUMBER is required when SOURCE=pr"
+      exit 1
+    fi
+    
+    if ! command -v gh &>/dev/null; then
+      echo "ERROR: 'gh' (GitHub CLI) is required for PR artifact downloads"
+      exit 1
+    fi
+    
+    cd "$WORK_DIR"
+    
+    # Get the latest workflow run for this PR
+    RUN_ID=$(gh run list -R "$GITHUB_REPO" --branch "pull/$PR_NUMBER/head" --workflow "Build and Test" --status success --limit 1 --json databaseId -q '.[0].databaseId')
+    
+    if [ -z "$RUN_ID" ]; then
+      echo "ERROR: No successful build found for PR #$PR_NUMBER"
+      exit 1
+    fi
+    
+    gh run download "$RUN_ID" -R "$GITHUB_REPO" -n "credential-provider"
+    PLUGIN_SOURCE=$(find_plugin_source "$WORK_DIR")
+    
+    if [ -z "$PLUGIN_SOURCE" ]; then
+      echo "ERROR: Failed to find binaries in PR artifact"
+      exit 1
+    fi
+    echo "   ✓ Downloaded from PR #$PR_NUMBER (run $RUN_ID)"
+    ;;
+    
+  *)
+    echo "ERROR: Unknown SOURCE '$SOURCE'. Valid values: local, release, pr"
+    exit 1
+    ;;
+esac
+
+# Verify we have the plugin DLL
+if [ ! -f "$PLUGIN_SOURCE/CredentialProvider.Devcontainer.dll" ]; then
+  echo "ERROR: CredentialProvider.Devcontainer.dll not found in $PLUGIN_SOURCE"
   exit 1
 fi
 
-echo "Installing Devcontainer credential provider..."
-echo "Source: $PLUGIN_SOURCE"
+# Install the plugin
+echo ""
+echo "2. Installing credential provider..."
 
-# Create destination directory
 mkdir -p "$PLUGIN_INSTALL_DIR"
-
-# Remove old files to ensure clean install
 rm -rf "$PLUGIN_INSTALL_DIR"/*
-
-# Copy all files
 cp -r "$PLUGIN_SOURCE/"* "$PLUGIN_INSTALL_DIR/"
 chmod -R 755 "$PLUGIN_INSTALL_DIR"
 
-echo "✓ Credential provider installed to: $PLUGIN_INSTALL_DIR"
+echo "   ✓ Installed to $PLUGIN_INSTALL_DIR"
 
 # Install Microsoft's artifacts-credprovider as fallback
 if [ "${SKIP_ARTIFACTS_CREDPROVIDER:-false}" != "true" ]; then
   echo ""
-  echo "Installing Microsoft artifacts-credprovider as fallback..."
+  echo "3. Installing Microsoft artifacts-credprovider as fallback..."
   
-  AZURE_CREDPROVIDER_SCRIPT_URL="https://raw.githubusercontent.com/microsoft/artifacts-credprovider/master/helpers/installcredprovider.sh"
+  # The upstream install script hardcodes $HOME/.nuget/, so we download directly
+  AZURE_CREDPROVIDER_VERSION="${AZURE_CREDPROVIDER_VERSION:-latest}"
+  AZURE_CREDPROVIDER_FILE="Microsoft.Net6.NuGet.CredentialProvider.tar.gz"
+  
+  if [ "$AZURE_CREDPROVIDER_VERSION" = "latest" ]; then
+    AZURE_CREDPROVIDER_URL="https://github.com/Microsoft/artifacts-credprovider/releases/latest/download/$AZURE_CREDPROVIDER_FILE"
+  else
+    AZURE_CREDPROVIDER_URL="https://github.com/Microsoft/artifacts-credprovider/releases/download/$AZURE_CREDPROVIDER_VERSION/$AZURE_CREDPROVIDER_FILE"
+  fi
   
   mkdir -p "$AZURE_PLUGIN_DIR"
   
   if command -v curl &>/dev/null; then
-    export NUGET_CREDENTIALPROVIDER_INSTALL_DIR="$AZURE_PLUGIN_DIR"
-    if curl -fsSL "$AZURE_CREDPROVIDER_SCRIPT_URL" | bash -s -- -n 2>/dev/null; then
-      echo "✓ Microsoft artifacts-credprovider installed to $AZURE_PLUGIN_DIR"
+    echo "   Downloading from $AZURE_CREDPROVIDER_URL"
+    
+    # Download and extract to temp, then move to target location
+    AZURE_TEMP_DIR="$WORK_DIR/azure-credprovider"
+    mkdir -p "$AZURE_TEMP_DIR"
+    
+    if curl -fsSL "$AZURE_CREDPROVIDER_URL" | tar xz -C "$AZURE_TEMP_DIR" 2>/dev/null; then
+      # The tarball extracts to plugins/netcore/CredentialProvider.Microsoft/
+      if [ -d "$AZURE_TEMP_DIR/plugins/netcore/CredentialProvider.Microsoft" ]; then
+        rm -rf "$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+        cp -r "$AZURE_TEMP_DIR/plugins/netcore/CredentialProvider.Microsoft" "$AZURE_PLUGIN_DIR/"
+        chmod -R 755 "$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+        echo "   ✓ Installed to $AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+      else
+        echo "   ⚠ Warning: Unexpected archive structure"
+        ls -la "$AZURE_TEMP_DIR"
+      fi
     else
-      echo "⚠ Warning: Failed to install Microsoft artifacts-credprovider"
+      echo "   ⚠ Warning: Failed to download Microsoft artifacts-credprovider"
     fi
   else
-    echo "⚠ Warning: curl not available, skipping artifacts-credprovider installation"
+    echo "   ⚠ Warning: curl not available, skipping"
   fi
+else
+  echo ""
+  echo "3. Skipping Microsoft artifacts-credprovider (SKIP_ARTIFACTS_CREDPROVIDER=true)"
 fi
 
 # Configure NUGET_PLUGIN_PATH
 if [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
   echo ""
-  echo "Configuring NUGET_PLUGIN_PATH..."
+  echo "4. Configuring environment..."
   
   PROFILE_SCRIPT="/etc/profile.d/nuget-credprovider.sh"
   
-  cat >"$PROFILE_SCRIPT" <<ENVSCRIPT
+  # Check if we can write to /etc/profile.d
+  if [ -w "/etc/profile.d" ] || [ "$(id -u)" = "0" ]; then
+    cat >"$PROFILE_SCRIPT" <<ENVSCRIPT
 # Devcontainer Credential Provider - Non-interactive NuGet authentication
 export NUGET_CREDENTIALPROVIDER_SESSIONTOKENCACHE_ENABLED="true"
 export NUGET_CREDENTIALPROVIDER_FORCE_CANSHOWDIALOG_TO="true"
@@ -98,15 +241,56 @@ export NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS="30"
 export NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS="30"
 
 # Plugin paths - custom provider first, then Azure artifacts-credprovider fallback
-export NUGET_PLUGIN_PATH="$PLUGIN_INSTALL_DIR:$AZURE_PLUGIN_DIR\${NUGET_PLUGIN_PATH:+:\$NUGET_PLUGIN_PATH}"
+# Note: NUGET_PLUGIN_PATH points to base directories, NuGet discovers CredentialProvider.*/ subfolders
+export NUGET_PLUGIN_PATH="$PLUGIN_BASE_DIR:$AZURE_PLUGIN_DIR\${NUGET_PLUGIN_PATH:+:\$NUGET_PLUGIN_PATH}"
 ENVSCRIPT
+    chmod 644 "$PROFILE_SCRIPT"
+    echo "   ✓ Configured $PROFILE_SCRIPT"
+  else
+    echo "   ⚠ Cannot write to /etc/profile.d (not root). Add to your shell profile:"
+    echo "   export NUGET_PLUGIN_PATH=\"$PLUGIN_BASE_DIR:$AZURE_PLUGIN_DIR\""
+  fi
+else
+  echo ""
+  echo "4. Skipping environment config (SKIP_ENV_CONFIG=true)"
+fi
 
-  chmod 644 "$PROFILE_SCRIPT"
-  echo "✓ Environment configured in $PROFILE_SCRIPT"
+# Run tests if requested
+if [ "$RUN_TESTS" = "true" ]; then
+  echo ""
+  echo "5. Running verification tests..."
+  
+  # Test that plugin exists
+  if [ -f "$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll" ]; then
+    echo "   ✓ Plugin DLL exists"
+  else
+    echo "   ✗ Plugin DLL not found"
+    exit 1
+  fi
+  
+  # Test that plugin can be invoked
+  if dotnet "$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll" --help >/dev/null 2>&1; then
+    echo "   ✓ Plugin executes successfully"
+  else
+    echo "   ✗ Plugin failed to execute"
+    exit 1
+  fi
+  
+  # Show version
+  VERSION=$(dotnet "$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll" --version 2>/dev/null || echo "unknown")
+  echo "   ✓ Version: $VERSION"
+  
+  # Test help output
+  echo ""
+  echo "   Help output:"
+  dotnet "$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll" --help | sed 's/^/   /'
+  
+  echo ""
+  echo "   ✓ All tests passed!"
 fi
 
 echo ""
-echo "Installation complete!"
+echo "=== Installation Complete ==="
 echo ""
 echo "Plugin locations:"
 echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
