@@ -13,11 +13,15 @@ on:
         required: false
         default: false
         type: boolean
+
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      pull-requests: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -30,20 +34,151 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.x
+      
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+      
+      - name: Run tests with coverage
+        run: |
+          dotnet test --configuration Release --nologo --verbosity normal \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage
+          
+          # List coverage files for debugging
+          echo "Coverage files generated:"
+          find ./coverage -name "*.xml" -o -name "*.json" || echo "No coverage files found"
+      
+      - name: Generate coverage report
+        id: generate-coverage
+        run: |
+          # Check if coverage files exist
+          if ! ls ./coverage/**/coverage.cobertura.xml 1> /dev/null 2>&1; then
+            echo "::error::No coverage.cobertura.xml files found in ./coverage"
+            echo "Contents of ./coverage directory:"
+            ls -la ./coverage/ || echo "Coverage directory not found"
+            exit 1
+          fi
+          
+          reportgenerator \
+            -reports:./coverage/**/coverage.cobertura.xml \
+            -targetdir:./coverage/report \
+            -reporttypes:"Html;MarkdownSummaryGithub;Cobertura;Badges" \
+            -title:"CredentialProvider.Devcontainer Coverage"
+          
+          # Verify the report was generated
+          if [ ! -f ./coverage/report/SummaryGithub.md ]; then
+            echo "::error::Failed to generate coverage report - SummaryGithub.md not found"
+            exit 1
+          fi
+          
+          if [ ! -f ./coverage/report/Cobertura.xml ]; then
+            echo "::error::Failed to generate coverage report - Cobertura.xml not found"
+            exit 1
+          fi
+          
+          echo "report-generated=true" >> $GITHUB_OUTPUT
+      
+      - name: Check coverage threshold
+        if: steps.generate-coverage.outputs.report-generated == 'true'
+        run: |
+          # Extract line coverage percentage from Cobertura report
+          COVERAGE=$(grep -oP 'line-rate="\K[0-9.]+' ./coverage/report/Cobertura.xml | head -1)
+          COVERAGE_PERCENT=$(echo "$COVERAGE * 100" | bc)
+          COVERAGE_INT=${COVERAGE_PERCENT%.*}
+          
+          echo "📊 **Code Coverage:** ${COVERAGE_INT}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Target is 80%, but currently at lower level due to plugin protocol infrastructure
+          if [ "$COVERAGE_INT" -lt 80 ]; then
+            echo "⚠️ Coverage is ${COVERAGE_INT}%, target is 80%" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Some NuGet plugin protocol infrastructure code (request handlers) is difficult to" >> $GITHUB_STEP_SUMMARY
+            echo "test in isolation without a full NuGet client. Core authentication and business logic is well covered." >> $GITHUB_STEP_SUMMARY
+            echo "::warning::Code coverage ${COVERAGE_INT}% is below the target 80% threshold"
+          else
+            echo "✅ Coverage is ${COVERAGE_INT}%, meeting the 80% threshold" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Add coverage to summary
+        if: steps.generate-coverage.outputs.report-generated == 'true'
+        run: |
+          if [ -f ./coverage/report/SummaryGithub.md ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "## 📊 Code Coverage Report" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat ./coverage/report/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::warning::Coverage summary file not found"
+          fi
+      
+      - name: Upload coverage report
+        if: steps.generate-coverage.outputs.report-generated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage/report
+      
+      - name: Add coverage PR comment
+        if: github.event_name == 'pull_request' && steps.generate-coverage.outputs.report-generated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Check if file exists before reading
+            const summaryPath = './coverage/report/SummaryGithub.md';
+            if (!fs.existsSync(summaryPath)) {
+              console.log('Coverage summary file not found, skipping PR comment');
+              return;
+            }
+            
+            const summary = fs.readFileSync(summaryPath, 'utf8');
+            
+            // Try to find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('📊 Code Coverage Report')
+            );
+            
+            const body = `## 📊 Code Coverage Report\n\n${summary}\n\n<sub>Coverage collected with [Coverlet](https://github.com/coverlet-coverage/coverlet) and reported with [ReportGenerator](https://github.com/danielpalme/ReportGenerator)</sub>`;
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+      
       - name: Restore and get version
         id: version
         run: |
-          dotnet restore src/CredentialProvider.AzureArtifacts
+          dotnet restore src/CredentialProvider.Devcontainer
           # Build first so MinVer runs, then get the version from the built assembly
-          dotnet build src/CredentialProvider.AzureArtifacts -c Release --no-restore
+          dotnet build src/CredentialProvider.Devcontainer -c Release --no-restore
           # Extract version from the built assembly using dotnet
-          VERSION=$(dotnet ./src/CredentialProvider.AzureArtifacts/bin/Release/net8.0/CredentialProvider.AzureArtifacts.dll --version | awk '{print $2}' | cut -d'+' -f1)
+          VERSION=$(dotnet ./src/CredentialProvider.Devcontainer/bin/Release/net8.0/CredentialProvider.Devcontainer.dll --version | awk '{print $2}' | cut -d'+' -f1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 **Build Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
       - name: Publish credential provider
         run: |
           # Framework-dependent build - portable across all platforms with .NET 8 runtime
-          dotnet publish src/CredentialProvider.AzureArtifacts \
+          dotnet publish src/CredentialProvider.Devcontainer \
             -c Release \
             -o ./publish/netcore
       - name: Copy install scripts
@@ -57,21 +192,21 @@ jobs:
       - name: Create tarball
         run: |
           cd ./publish
-          tar -czvf credentialprovider-azureartifacts.tar.gz install.sh uninstall.sh netcore/
+          tar -czvf devcontainer-credprovider.tar.gz install.sh uninstall.sh netcore/
       - name: Create zip (for Windows users)
         run: |
           cd ./publish
-          zip -r credentialprovider-azureartifacts.zip install.ps1 uninstall.ps1 netcore/
+          zip -r devcontainer-credprovider.zip install.ps1 uninstall.ps1 netcore/
       - name: Upload tarball artifact
         uses: actions/upload-artifact@v4
         with:
-          name: credentialprovider-azureartifacts-tarball
-          path: ./publish/credentialprovider-azureartifacts.tar.gz
+          name: devcontainer-credprovider-tarball
+          path: ./publish/devcontainer-credprovider.tar.gz
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: credentialprovider-azureartifacts-zip
-          path: ./publish/credentialprovider-azureartifacts.zip
+          name: devcontainer-credprovider-zip
+          path: ./publish/devcontainer-credprovider.zip
   summary:
     needs: build
     runs-on: ubuntu-latest
@@ -96,11 +231,11 @@ jobs:
           # Install GitHub CLI if needed: https://cli.github.com/
 
           # Any platform (Linux, macOS, Windows with WSL):
-          gh run download ${{ github.run_id }} -n credentialprovider-azureartifacts-tarball -R ${{ github.repository }} \
+          gh run download ${{ github.run_id }} -n devcontainer-credprovider-tarball -R ${{ github.repository }} \
             && mkdir -p /tmp/cred-provider \
-            && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
+            && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
+            && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
           \`\`\`
           EOF
   release:
@@ -110,6 +245,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Determine version
         id: version
@@ -131,6 +267,31 @@ jobs:
           merge-multiple: true
       - name: List artifacts
         run: ls -la ./artifacts/
+
+      - name: Generate checksums
+        run: |
+          cd ./artifacts
+          sha256sum *.tar.gz *.zip > checksums.sha256
+          echo "📎 SHA-256 checksums" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat checksums.sha256 >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign release artifacts (keyless)
+        run: |
+          cd ./artifacts
+          for f in *.tar.gz *.zip; do
+            echo "Signing $f"
+            cosign sign-blob --yes \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.cert" \
+              "$f"
+          done
+          echo "✅ Signed artifacts with Sigstore (keyless)" >> $GITHUB_STEP_SUMMARY
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -153,9 +314,9 @@ jobs:
             # Using GitHub CLI (works with private repos)
             gh release download ${{ steps.version.outputs.version }} -R ${{ github.repository }} -p "*.tar.gz" \
               && mkdir -p /tmp/cred-provider \
-              && tar xzf credentialprovider-azureartifacts.tar.gz -C /tmp/cred-provider \
+              && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
-              && rm -rf /tmp/cred-provider credentialprovider-azureartifacts.tar.gz
+              && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
             ```
 
             ### Install (Windows PowerShell)
@@ -163,9 +324,9 @@ jobs:
             ```powershell
             # Using GitHub CLI (works with private repos)
             gh release download ${{ steps.version.outputs.version }} -R ${{ github.repository }} -p "*.zip"
-            Expand-Archive -Path "credentialprovider-azureartifacts.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
+            Expand-Archive -Path "devcontainer-credprovider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
             & "$env:TEMP\cred-provider\install.ps1"
-            Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "credentialprovider-azureartifacts.zip"
+            Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "devcontainer-credprovider.zip"
             ```
 
             ### After Installation
@@ -173,9 +334,8 @@ jobs:
             Just run `dotnet restore` - the credential provider handles authentication automatically!
 
             It tries these methods in order:
-            1. `VSS_NUGET_ACCESSTOKEN` environment variable
-            2. `~/ado-auth-helper` (devcontainer feature)
-            3. Azure CLI / DefaultAzureCredential
+            1. `~/ado-auth-helper` (devcontainer auth helper)
+            2. Azure.Identity DefaultAzureCredential (Azure CLI, managed identity, etc.)
           files: ./artifacts/*
           draft: false
           prerelease: false

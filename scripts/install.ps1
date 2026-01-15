@@ -1,4 +1,4 @@
-# Install the AzureArtifacts credential provider to the NuGet plugins folder
+# Install the Devcontainer credential provider to the NuGet plugins folder
 #
 # Usage:
 #   From NuGet package: ~/.nuget/packages/azureartifacts.credentialprovider/1.0.0/tools/install.ps1
@@ -7,12 +7,12 @@
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pluginDest = Join-Path $env:USERPROFILE ".nuget\plugins\netcore\CredentialProvider.AzureArtifacts"
+$pluginDest = Join-Path $env:USERPROFILE ".nuget\plugins\netcore\CredentialProvider.Devcontainer"
 
 # Check for source in order of preference:
-# 1. NuGet package structure: tools/netcore/CredentialProvider.AzureArtifacts/
+# 1. NuGet package structure: tools/netcore/CredentialProvider.Devcontainer/
 # 2. Local publish output: bin/publish/
-$nugetPackageSource = Join-Path $scriptDir "netcore\CredentialProvider.AzureArtifacts"
+$nugetPackageSource = Join-Path $scriptDir "netcore\CredentialProvider.Devcontainer"
 $localPublishSource = Join-Path $scriptDir "bin\publish"
 
 if (Test-Path $nugetPackageSource) {
@@ -31,7 +31,7 @@ If building from source, run: dotnet publish -c Release -o bin/publish
     exit 1
 }
 
-Write-Host "Installing AzureArtifacts credential provider..."
+Write-Host "Installing Devcontainer credential provider..."
 Write-Host "Source: $pluginSource"
 
 # Create destination directory
@@ -45,7 +45,7 @@ Copy-Item -Path "$pluginSource\*" -Destination $pluginDest -Recurse -Force
 
 Write-Host "Credential provider installed to: $pluginDest"
 Write-Host ""
-Write-Host "You can now use 'dotnet restore' with Azure Artifacts feeds."
+Write-Host "You can now use 'dotnet restore' with Devcontainer feeds."
 Write-Host "No environment variables needed!"
 Write-Host ""
 Write-Host "To verify: Get-ChildItem $pluginDest"

@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a problem
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please avoid pasting access tokens or private feed URLs.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include expected vs actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant logs (redact any secrets/tokens).
+      render: shell
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Ubuntu 22.04 / Windows 11 / macOS 14
+  - type: input
+    id: dotnet
+    attributes:
+      label: dotnet --info
+      placeholder: Paste the version line(s)

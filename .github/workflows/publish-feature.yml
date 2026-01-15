@@ -12,6 +12,10 @@ on:
         default: true
         type: boolean
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -41,20 +45,20 @@ jobs:
       - name: Build credential provider
         id: build
         run: |
-          dotnet restore src/CredentialProvider.AzureArtifacts
-          dotnet publish src/CredentialProvider.AzureArtifacts \
+          dotnet restore src/CredentialProvider.Devcontainer
+          dotnet publish src/CredentialProvider.Devcontainer \
             -c Release \
             -o ./publish/netcore
           
           # Extract version from the built assembly (set by MinVer)
-          VERSION=$(dotnet ./publish/netcore/CredentialProvider.AzureArtifacts.dll --version | awk '{print $2}' | cut -d'+' -f1)
+          VERSION=$(dotnet ./publish/netcore/CredentialProvider.Devcontainer.dll --version | awk '{print $2}' | cut -d'+' -f1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Credential Provider Version: $VERSION"
 
       - name: Embed binaries in feature
         run: |
           # Create the binaries directory inside the feature
-          FEATURE_DIR=".devcontainer-feature/src/devcontainer-feature"
+          FEATURE_DIR=".devcontainer-feature/src/devcontainer-credprovider"
           mkdir -p "$FEATURE_DIR/netcore"
           
           # Copy the built credential provider binaries

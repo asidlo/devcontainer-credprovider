@@ -1,0 +1,73 @@
+{
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "releaseVersion",
+            "type": "promptString",
+            "description": "Release version tag (e.g., v2.0.0, or 'latest')",
+            "default": "latest"
+        },
+        {
+            "id": "prNumber",
+            "type": "promptString",
+            "description": "Pull Request number to download artifact from"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "Install: Build Locally",
+            "type": "shell",
+            "command": "sudo -E ./scripts/install.sh",
+            "options": {
+                "env": {
+                    "RUN_TESTS": "true",
+                }
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "detail": "Build from local source and install with tests"
+        },
+        {
+            "label": "Install: From GitHub Release",
+            "type": "shell",
+            "command": "sudo -E ./scripts/install.sh",
+            "options": {
+                "env": {
+                    "SOURCE": "release",
+                    "RELEASE_VERSION": "${input:releaseVersion}",
+                    "RUN_TESTS": "true",
+                }
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "detail": "Download and install from a GitHub release"
+        },
+        {
+            "label": "Install: From PR Build",
+            "type": "shell",
+            "command": "sudo -E ./scripts/install.sh",
+            "options": {
+                "env": {
+                    "SOURCE": "pr",
+                    "PR_NUMBER": "${input:prNumber}",
+                    "RUN_TESTS": "true",
+                }
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "detail": "Download and install from a PR build artifact (requires gh CLI)"
+        }
+    ]
+}

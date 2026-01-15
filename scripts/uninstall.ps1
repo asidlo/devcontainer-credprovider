@@ -1,9 +1,9 @@
-# Uninstall the AzureArtifacts credential provider
+# Uninstall the Devcontainer credential provider
 
-$pluginDest = Join-Path $env:USERPROFILE ".nuget\plugins\netcore\CredentialProvider.AzureArtifacts"
+$pluginDest = Join-Path $env:USERPROFILE ".nuget\plugins\netcore\CredentialProvider.Devcontainer"
 
 if (Test-Path $pluginDest) {
-    Write-Host "Removing AzureArtifacts credential provider..."
+    Write-Host "Removing Devcontainer credential provider..."
     Remove-Item -Path $pluginDest -Recurse -Force
     Write-Host "Credential provider removed from: $pluginDest"
 

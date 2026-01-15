@@ -1,0 +1,20 @@
+{
+  "id": "devcontainer-credprovider",
+  "version": "2.0.0",
+  "name": "Devcontainer Credential Provider",
+  "documentationURL": "https://github.com/asidlo/devcontainer-credprovider",
+  "description": "Installs a silent/headless NuGet credential provider for devcontainers that authenticates via auth helpers without interactive prompts. Falls back to Microsoft's artifacts-credprovider for device code flow.",
+  "options": {},
+  "installsAfter": [
+    "ghcr.io/devcontainers/features/dotnet",
+    "ghcr.io/devcontainers/features/azure-cli",
+    "ghcr.io/microsoft/codespace-features/artifacts-helper"
+  ],
+  "containerEnv": {
+    "NUGET_CREDENTIALPROVIDER_SESSIONTOKENCACHE_ENABLED": "true",
+    "NUGET_CREDENTIALPROVIDER_FORCE_CANSHOWDIALOG_TO": "true",
+    "NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS": "30",
+    "NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS": "30",
+    "NUGET_PLUGIN_PATH": "/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/plugins/azure:${containerEnv:NUGET_PLUGIN_PATH}"
+  }
+}
