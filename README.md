@@ -98,8 +98,45 @@ This is a **NuGet credential provider plugin** that NuGet automatically calls wh
 
 When NuGet requests credentials for an Azure Artifacts feed:
 
-1. **Try auth helpers** - Runs `~/ado-auth-helper get-access-token`
-2. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
+1. **Validate 2FA (if configured)** - Verifies TOTP code if `NUGET_CREDPROVIDER_2FA_SECRET` is set
+2. **Try auth helpers** - Runs `~/ado-auth-helper get-access-token`
+3. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
+
+### Two-Factor Authentication (2FA)
+
+Optional TOTP-based 2FA support using authenticator apps (Google Authenticator, Microsoft Authenticator, etc.):
+
+**Setup:**
+
+1. Generate a TOTP secret (or use an existing one from your authenticator app)
+2. Set environment variables in your devcontainer:
+
+```json
+{
+  "remoteEnv": {
+    "NUGET_CREDPROVIDER_2FA_SECRET": "YOUR_BASE32_ENCODED_SECRET",
+    "NUGET_CREDPROVIDER_2FA_CODE": "123456"
+  }
+}
+```
+
+**Environment Variables:**
+
+- `NUGET_CREDPROVIDER_2FA_SECRET`: Base32-encoded TOTP secret (optional)
+- `NUGET_CREDPROVIDER_2FA_CODE`: Current 6-digit TOTP code from your authenticator app
+
+**Notes:**
+
+- 2FA is **completely optional** - if not configured, authentication works normally
+- When configured, credential requests are blocked unless a valid TOTP code is provided
+- Supports clock skew tolerance (±30 seconds)
+- Compatible with standard authenticator apps (Google Authenticator, Microsoft Authenticator, Authy, etc.)
+
+**Security Considerations:**
+
+- Store `NUGET_CREDPROVIDER_2FA_SECRET` securely (use GitHub Codespaces secrets, not in git)
+- Update `NUGET_CREDPROVIDER_2FA_CODE` before running `dotnet restore` (codes expire every 30 seconds)
+- For automation, consider using CI/CD secret management instead of static environment variables
 
 ## Devcontainer Feature (Recommended)
 
