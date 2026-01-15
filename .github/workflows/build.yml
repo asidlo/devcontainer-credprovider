@@ -292,13 +292,52 @@ jobs:
               "$f"
           done
           echo "✅ Signed artifacts with Sigstore (keyless)" >> $GITHUB_STEP_SUMMARY
-      - name: Create GitHub Release
+      
+      - name: Check for existing release
+        id: check-release
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Check if release exists and if it's editable
+          RELEASE_INFO=$(gh release view "$VERSION" --json isDraft,assets 2>/dev/null || echo "NOT_FOUND")
+          
+          if [ "$RELEASE_INFO" = "NOT_FOUND" ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "📦 No existing release found for $VERSION" >> $GITHUB_STEP_SUMMARY
+          else
+            IS_DRAFT=$(echo "$RELEASE_INFO" | jq -r '.isDraft')
+            ASSET_COUNT=$(echo "$RELEASE_INFO" | jq '.assets | length')
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
+            echo "asset_count=$ASSET_COUNT" >> $GITHUB_OUTPUT
+            
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "can_update=true" >> $GITHUB_OUTPUT
+              echo "📦 Existing draft release found - will update" >> $GITHUB_STEP_SUMMARY
+            elif [ "$ASSET_COUNT" = "0" ]; then
+              # Published release with no assets - delete and recreate
+              echo "📦 Existing release has no assets - deleting to recreate" >> $GITHUB_STEP_SUMMARY
+              gh release delete "$VERSION" --yes
+              echo "exists=false" >> $GITHUB_OUTPUT
+              echo "can_update=true" >> $GITHUB_OUTPUT
+            else
+              echo "can_update=false" >> $GITHUB_OUTPUT
+              echo "⚠️ Release $VERSION already exists with $ASSET_COUNT assets - skipping upload" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # With immutable releases enabled, we must create as draft first, then publish
+      - name: Create Draft GitHub Release
+        id: create-release
+        if: steps.check-release.outputs.exists != 'true' || steps.check-release.outputs.can_update == 'true'
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
           generate_release_notes: true
           append_body: true
+          fail_on_unmatched_files: true
           body: |
             ---
 
@@ -337,8 +376,14 @@ jobs:
             1. `~/ado-auth-helper` (devcontainer auth helper)
             2. Azure.Identity DefaultAzureCredential (Azure CLI, managed identity, etc.)
           files: ./artifacts/*
-          draft: false
+          draft: true  # Create as draft first to allow asset uploads with immutable releases
           prerelease: false
+      
+      - name: Publish Release
+        if: steps.create-release.outputs.id != ''
+        run: gh release edit ${{ steps.version.outputs.version }} --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Publish the devcontainer feature after creating a release
   publish-feature:
