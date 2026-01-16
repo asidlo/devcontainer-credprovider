@@ -229,20 +229,17 @@ jobs:
 
           \`\`\`bash
           # Install GitHub CLI if needed: https://cli.github.com/
-          REPO="${{ github.repository }}"
-          RUN_ID="${{ github.run_id }}"
-          ARTIFACT_NAME="devcontainer-credprovider-tarball"
 
-          ARTIFACT_ID=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
-            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | .id")
+          # Download to a specific directory to avoid path traversal issues
+          gh run download ${{ github.run_id }} -n devcontainer-credprovider-tarball -R ${{ github.repository }} -D /tmp/artifact
 
-          gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > artifact.zip
-          unzip -p artifact.zip '*.tar.gz' > devcontainer-credprovider.tar.gz
+          # Move the tarball to current directory
+          mv /tmp/artifact/devcontainer-credprovider.tar.gz ./
 
           mkdir -p /tmp/cred-provider \
             && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz artifact.zip
+            && rm -rf /tmp/cred-provider /tmp/artifact devcontainer-credprovider.tar.gz
           \`\`\`
           EOF
   release:
