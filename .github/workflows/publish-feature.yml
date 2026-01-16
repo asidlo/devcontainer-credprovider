@@ -93,7 +93,7 @@ jobs:
           cd .devcontainer-feature
           devcontainer features publish \
             --registry ghcr.io \
-            --namespace ${{ github.repository }} \
+            --namespace ${{ github.repository_owner }}/features \
             ./src
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
