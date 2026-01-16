@@ -39,6 +39,25 @@ This project implements the following security practices:
 - **Pinned actions** - All GitHub Actions are pinned to SHA hashes to prevent supply chain attacks
 - **Minimal permissions** - Workflows use least-privilege permissions
 - **Code review** - CODEOWNERS requires review for security-sensitive files
+- **Two-factor authentication** - Optional TOTP-based 2FA support for additional security
+
+## Two-Factor Authentication (2FA)
+
+This credential provider supports optional TOTP-based two-factor authentication for enhanced security:
+
+- **Environment-based**: Configure via `NUGET_CREDPROVIDER_2FA_SECRET` and `NUGET_CREDPROVIDER_2FA_CODE`
+- **Standard TOTP**: Compatible with Google Authenticator, Microsoft Authenticator, Authy, etc.
+- **Optional**: 2FA is opt-in; existing workflows continue to work without configuration
+- **Clock skew tolerance**: Accepts codes from ±30 seconds to handle minor time differences
+
+**Best Practices:**
+
+1. Store TOTP secrets in secure secret management systems (GitHub Codespaces secrets, Azure Key Vault, etc.)
+2. Never commit `NUGET_CREDPROVIDER_2FA_SECRET` to source control
+3. Rotate TOTP secrets periodically
+4. Use 2FA in addition to, not instead of, other security measures
+
+For setup instructions, see the [README](README.md#two-factor-authentication-2fa).
 
 ## Verifying Releases
 

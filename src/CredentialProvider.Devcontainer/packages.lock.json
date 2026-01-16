@@ -17,6 +17,18 @@
           "NuGet.Packaging": "6.13.1"
         }
       },
+      "Otp.NET": {
+        "type": "Direct",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "Fk1NKc0lWmlo6LAFYpFJInRgFKt72knRNEvxndDYoQHFwYOPXav+WEUBvQA0k4lxq5xt0SymrZ+oi0F/G40bPQ=="
+      },
+      "QRCoder": {
+        "type": "Direct",
+        "requested": "[1.6.0, )",
+        "resolved": "1.6.0",
+        "contentHash": "XmPA81eo+oRxBuyVdswsSkTGTE1d3thfF11Z1PdD7oB56A6HU4G4AAOdySmGRMb/cljwlFTMWUtosGEnwpS6GA=="
+      },
       "Newtonsoft.Json": {
         "type": "Transitive",
         "resolved": "13.0.3",

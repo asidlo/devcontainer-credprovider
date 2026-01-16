@@ -98,8 +98,75 @@ This is a **NuGet credential provider plugin** that NuGet automatically calls wh
 
 When NuGet requests credentials for an Azure Artifacts feed:
 
-1. **Try auth helpers** - Runs `~/ado-auth-helper get-access-token`
-2. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
+1. **Validate 2FA (if configured)** - Verifies TOTP code if `NUGET_CREDPROVIDER_2FA_SECRET` is set
+2. **Try auth helpers** - Runs `~/ado-auth-helper get-access-token`
+3. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
+
+### Two-Factor Authentication (2FA)
+
+Optional TOTP-based 2FA support using authenticator apps (Google Authenticator, Microsoft Authenticator, etc.):
+
+**Quick Setup (Recommended):**
+
+1. Run the setup command to auto-generate a secret and display a QR code:
+
+```bash
+dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer.dll --setup-2fa
+```
+
+This will:
+- Auto-generate a TOTP secret (saved to `~/.nuget-credprovider-2fa-secret`)
+- Display a QR code you can scan with your authenticator app
+- Show the current code for verification
+
+2. Scan the QR code with your authenticator app
+
+3. Enable 2FA in your devcontainer:
+
+```json
+{
+  "remoteEnv": {
+    "NUGET_CREDPROVIDER_2FA_ENABLED": "true",
+    "NUGET_CREDPROVIDER_2FA_CODE": "123456"  // Current code from your app
+  }
+}
+```
+
+4. Before running `dotnet restore`, update `NUGET_CREDPROVIDER_2FA_CODE` with the current code from your authenticator app
+
+**Environment Variables:**
+
+- `NUGET_CREDPROVIDER_2FA_ENABLED`: Set to `true` to enable 2FA validation (optional, defaults to `false`)
+- `NUGET_CREDPROVIDER_2FA_SECRET`: Base32-encoded TOTP secret (optional, auto-generated and stored if not provided)
+- `NUGET_CREDPROVIDER_2FA_CODE`: Current 6-digit TOTP code from your authenticator app (required when enabled)
+
+**Advanced: Manual Secret Setup:**
+
+If you prefer to manage the secret yourself (e.g., via Codespaces secrets):
+
+```json
+{
+  "remoteEnv": {
+    "NUGET_CREDPROVIDER_2FA_ENABLED": "true",
+    "NUGET_CREDPROVIDER_2FA_SECRET": "YOUR_BASE32_SECRET",
+    "NUGET_CREDPROVIDER_2FA_CODE": "123456"
+  }
+}
+```
+
+**Notes:**
+
+- 2FA is **completely optional** - if `NUGET_CREDPROVIDER_2FA_ENABLED` is not set or `false`, authentication works normally
+- Secret is auto-generated on first use and persisted to `~/.nuget-credprovider-2fa-secret`
+- Supports clock skew tolerance (±30 seconds)
+- Compatible with all standard authenticator apps (Google Authenticator, Microsoft Authenticator, Authy, etc.)
+- Run `--setup-2fa` anytime to view your QR code again
+
+**Security Considerations:**
+
+- The secret file `~/.nuget-credprovider-2fa-secret` is automatically set to user-read-only permissions
+- For shared environments, use `NUGET_CREDPROVIDER_2FA_SECRET` environment variable with GitHub Codespaces secrets
+- Update `NUGET_CREDPROVIDER_2FA_CODE` before each session (codes expire every 30 seconds)
 
 ## Devcontainer Feature (Recommended)
 
