@@ -265,11 +265,18 @@ jobs:
           echo "version_num=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "🏷️ Release version: $VERSION" >> $GITHUB_STEP_SUMMARY
 
-      - name: Download all artifacts
+      - name: Download tarball artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
+          name: devcontainer-credprovider-tarball
           path: ./artifacts
-          merge-multiple: true
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: devcontainer-credprovider-zip
+          path: ./artifacts
+
       - name: List artifacts
         run: ls -la ./artifacts/
 
@@ -351,6 +358,28 @@ jobs:
             - .NET 8 runtime installed (required to run the credential provider)
             - Download: https://dotnet.microsoft.com/download/dotnet/8.0
 
+            ### Install as Devcontainer Feature (Recommended)
+
+            Add to your `.devcontainer/devcontainer.json`:
+
+            ```json
+            {
+              "features": {
+                "ghcr.io/${{ github.repository }}/devcontainer-credprovider:${{ steps.version.outputs.version_num }}": {}
+              }
+            }
+            ```
+
+            Or use `latest` for the most recent version:
+
+            ```json
+            {
+              "features": {
+                "ghcr.io/${{ github.repository }}/devcontainer-credprovider:latest": {}
+              }
+            }
+            ```
+
             ### Install (Linux/macOS)
 
             ```bash
@@ -388,6 +417,20 @@ jobs:
             It tries these methods in order:
             1. `~/ado-auth-helper` (devcontainer auth helper)
             2. Microsoft's `artifacts-credprovider` (device code flow fallback)
+
+            ### Configuration
+
+            To disable the plugin (for testing fallback behavior):
+
+            ```bash
+            export DEVCONTAINER_CREDPROVIDER_DISABLED=true
+            ```
+
+            Or create a config file at `~/.config/devcontainer-credprovider/config.json`:
+
+            ```json
+            { "disabled": true, "verbosity": "debug" }
+            ```
           files: ./artifacts/*
           draft: true  # Create as draft first to allow asset uploads with immutable releases
           prerelease: false
