@@ -35,6 +35,11 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        // Always log when the process starts to help with debugging
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process started with args: [{string.Join(", ", args)}]");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process ID: {Environment.ProcessId}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Version: {GetVersion()}");
+
         // Handle -Plugin argument (required for NuGet to recognize this as a credential provider)
         if (args.Contains("-Plugin", StringComparer.OrdinalIgnoreCase))
         {
@@ -300,7 +305,10 @@ internal sealed class GetOperationClaimsRequestHandler : IRequestHandler
         var payload = MessageUtilities.DeserializePayload<GetOperationClaimsRequest>(request);
         var packageSourceUri = payload?.PackageSourceRepository;
 
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] GetOperationClaims: '{packageSourceUri}'");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] ============== GetOperationClaims REQUEST ==============" );
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] PackageSourceRepository: '{packageSourceUri}'");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Request ID: {request?.RequestId}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process ID: {Environment.ProcessId}");
 
         // When package source is null/empty, NuGet is asking for source-agnostic operations
         // Return Authentication to indicate we handle auth
@@ -345,7 +353,11 @@ internal sealed class GetAuthenticationCredentialsRequestHandler : IRequestHandl
         var payload = MessageUtilities.DeserializePayload<GetAuthenticationCredentialsRequest>(request);
         var uri = payload?.Uri?.AbsoluteUri;
 
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] GetAuthenticationCredentials: {uri}, IsRetry={payload?.IsRetry}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] ============== GetAuthenticationCredentials REQUEST ==============" );
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] URI: {uri}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] IsRetry: {payload?.IsRetry}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Request ID: {request?.RequestId}");
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process ID: {Environment.ProcessId}");
 
         if (string.IsNullOrEmpty(uri) || !Program.IsAzureDevOpsUri(uri))
         {

@@ -70,7 +70,7 @@ if command -v curl &>/dev/null; then
     # Download and extract to temp, then move to target location
     AZURE_TEMP_DIR=$(mktemp -d)
     trap "rm -rf $AZURE_TEMP_DIR" EXIT
-    
+
     echo "Downloading from $AZURE_CREDPROVIDER_URL"
     if curl -fsSL "$AZURE_CREDPROVIDER_URL" | tar xz -C "$AZURE_TEMP_DIR" 2>/dev/null; then
         # The tarball extracts to plugins/netcore/CredentialProvider.Microsoft/
@@ -91,7 +91,7 @@ else
 fi
 
 # Configure environment for terminal shells
-# Note: C# DevKit gets NUGET_PLUGIN_PATH from containerEnv in devcontainer-feature.json
+# Note: C# DevKit gets NUGET_PLUGIN_PATHS from containerEnv in devcontainer-feature.json
 echo ""
 echo "Configuring environment for terminal shells..."
 
@@ -107,7 +107,7 @@ export NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS="30"
 
 # Set plugin paths so NuGet can find credential providers
 # Custom devcontainer provider is first, falls back to Microsoft's artifacts-credprovider
-export NUGET_PLUGIN_PATH="/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/plugins/azure${NUGET_PLUGIN_PATH:+:$NUGET_PLUGIN_PATH}"
+export NUGET_PLUGIN_PATHS="/usr/local/share/nuget/plugins/custom;/usr/local/share/nuget/plugins/azure"
 ENVSCRIPT
 
 chmod 644 "$PROFILE_SCRIPT"
@@ -119,5 +119,5 @@ echo "You can now use 'dotnet restore' with Azure Artifacts feeds."
 echo "C# DevKit will also use this credential provider."
 echo ""
 echo "Plugin locations:"
-echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
-echo "  Azure (device code flow): $AZURE_PLUGIN_DIR"
+echo "  Custom (auth helper)           : $PLUGIN_INSTALL_DIR"
+echo "  Azure (artifacts-credprovider) : $AZURE_PLUGIN_DIR"

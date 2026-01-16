@@ -14,7 +14,7 @@
 #   RUN_TESTS                   - Run verification tests after install (default: false)
 #   PLUGIN_INSTALL_DIR          - Override installation directory (default: /usr/local/share/nuget/plugins/custom)
 #   SKIP_ARTIFACTS_CREDPROVIDER - Skip installing Microsoft's artifacts-credprovider (default: false)
-#   SKIP_ENV_CONFIG             - Skip configuring NUGET_PLUGIN_PATH (default: false)
+#   SKIP_ENV_CONFIG             - Skip configuring NUGET_PLUGIN_PATHS (default: false)
 #   GITHUB_REPO                 - GitHub repo for downloads (default: asidlo/devcontainer-credprovider)
 
 set -e
@@ -224,12 +224,16 @@ else
   echo "3. Skipping Microsoft artifacts-credprovider (SKIP_ARTIFACTS_CREDPROVIDER=true)"
 fi
 
-# Configure NUGET_PLUGIN_PATH
+# Configure NUGET_PLUGIN_PATHS (note: plural with 'S' is required by NuGet)
 if [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
   echo ""
   echo "4. Configuring environment..."
   
   PROFILE_SCRIPT="/etc/profile.d/nuget-credprovider.sh"
+  
+  # Build plugin paths - must point to the actual plugin DLL, semicolon-separated (even on Linux)
+  DEVCONTAINER_PLUGIN_DLL="$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll"
+  AZURE_PLUGIN_DLL="$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft/CredentialProvider.Microsoft.dll"
   
   # Check if we can write to /etc/profile.d
   if [ -w "/etc/profile.d" ] || [ "$(id -u)" = "0" ]; then
@@ -241,14 +245,14 @@ export NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS="30"
 export NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS="30"
 
 # Plugin paths - custom provider first, then Azure artifacts-credprovider fallback
-# Note: NUGET_PLUGIN_PATH points to base directories, NuGet discovers CredentialProvider.*/ subfolders
-export NUGET_PLUGIN_PATH="$PLUGIN_BASE_DIR:$AZURE_PLUGIN_DIR\${NUGET_PLUGIN_PATH:+:\$NUGET_PLUGIN_PATH}"
+# Note: NUGET_PLUGIN_PATHS must be semicolon-separated (even on Linux) and point to actual plugin DLLs
+export NUGET_PLUGIN_PATHS="$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL"
 ENVSCRIPT
     chmod 644 "$PROFILE_SCRIPT"
     echo "   ✓ Configured $PROFILE_SCRIPT"
   else
     echo "   ⚠ Cannot write to /etc/profile.d (not root). Add to your shell profile:"
-    echo "   export NUGET_PLUGIN_PATH=\"$PLUGIN_BASE_DIR:$AZURE_PLUGIN_DIR\""
+    echo "   export NUGET_PLUGIN_PATHS=\"$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL\""
   fi
 else
   echo ""
