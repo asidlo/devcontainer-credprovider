@@ -228,7 +228,8 @@ jobs:
           Use the GitHub CLI to download artifacts from this workflow run.
 
           \`\`\`bash
-          # Install GitHub CLI if needed: https://cli.github.com/
+          # Install GitHub CLI if needed: https://cli.github.com/ and login
+          gh auth login
 
           # Download to a specific directory to avoid path traversal issues
           gh run download ${{ github.run_id }} -n devcontainer-credprovider-tarball -R ${{ github.repository }} -D /tmp/artifact
