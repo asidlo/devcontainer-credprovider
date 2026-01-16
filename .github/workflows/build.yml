@@ -399,3 +399,4 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write  # Required by called workflow (only used on PR triggers)
