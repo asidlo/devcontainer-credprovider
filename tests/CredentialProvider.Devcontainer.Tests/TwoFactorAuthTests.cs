@@ -25,32 +25,31 @@ public class TwoFactorAuthTests : IDisposable
     }
 
     [Fact]
-    public void ValidateTwoFactorAuth_WhenNotConfigured_ReturnsTrue()
+    public void ValidateTwoFactorAuth_WhenNotEnabled_ReturnsTrue()
     {
-        // Arrange - ensure no 2FA environment variables are set
-        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", null);
+        // Arrange - ensure 2FA is not enabled
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", null);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", null);
 
         // Act
         var result = Program.ValidateTwoFactorAuth();
 
         // Assert
-        Assert.True(result, "2FA validation should pass when not configured");
+        Assert.True(result, "2FA validation should pass when not enabled");
     }
 
     [Fact]
-    public void ValidateTwoFactorAuth_WhenSecretSetButNoCode_ReturnsFalse()
+    public void ValidateTwoFactorAuth_WhenEnabledButNoCode_ReturnsFalse()
     {
         // Arrange
-        var secret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
-        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", null);
 
         // Act
         var result = Program.ValidateTwoFactorAuth();
 
         // Assert
-        Assert.False(result, "2FA validation should fail when secret is set but code is not provided");
+        Assert.False(result, "2FA validation should fail when enabled but code is not provided");
     }
 
     [Fact]
@@ -62,6 +61,7 @@ public class TwoFactorAuthTests : IDisposable
         var totp = new Totp(secretKey);
         var validCode = totp.ComputeTotp();
 
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", validCode);
 
@@ -80,6 +80,7 @@ public class TwoFactorAuthTests : IDisposable
         var secret = Base32Encoding.ToString(secretKey);
         var invalidCode = "000000"; // Invalid code
 
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", invalidCode);
 
@@ -102,6 +103,7 @@ public class TwoFactorAuthTests : IDisposable
         var pastTime = DateTime.UtcNow.AddMinutes(-5);
         var expiredCode = totp.ComputeTotp(pastTime);
 
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", expiredCode);
 
@@ -117,6 +119,7 @@ public class TwoFactorAuthTests : IDisposable
     {
         // Arrange
         var invalidSecret = "INVALID_BASE32_SECRET!!!";
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", invalidSecret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", "123456");
 
@@ -136,6 +139,7 @@ public class TwoFactorAuthTests : IDisposable
         var totp = new Totp(secretKey);
         var validCode = totp.ComputeTotp();
 
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", validCode);
 
@@ -155,6 +159,7 @@ public class TwoFactorAuthTests : IDisposable
         var secret = Base32Encoding.ToString(secretKey);
         var invalidCode = "000000";
 
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", invalidCode);
 
@@ -166,17 +171,17 @@ public class TwoFactorAuthTests : IDisposable
     }
 
     [Fact]
-    public void ValidateTwoFactorAuth_WithWhitespaceSecret_ReturnsTrue()
+    public void ValidateTwoFactorAuth_WithEnabledFalse_ReturnsTrue()
     {
-        // Arrange - whitespace-only secret should be treated as not configured
-        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", "   ");
+        // Arrange - 2FA explicitly disabled
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "false");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", "123456");
 
         // Act
         var result = Program.ValidateTwoFactorAuth();
 
         // Assert
-        Assert.True(result, "2FA validation should pass when secret is whitespace (treated as not configured)");
+        Assert.True(result, "2FA validation should pass when explicitly disabled");
     }
 
     [Fact]
@@ -191,6 +196,7 @@ public class TwoFactorAuthTests : IDisposable
         var pastTime = DateTime.UtcNow.AddSeconds(-30);
         var codeFromPast = totp.ComputeTotp(pastTime);
 
+        SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED", "true");
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET", secret);
         SetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE", codeFromPast);
 

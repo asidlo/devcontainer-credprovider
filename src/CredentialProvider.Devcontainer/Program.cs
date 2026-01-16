@@ -8,8 +8,10 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using NuGet.Protocol.Plugins;
 using OtpNet;
+using QRCoder;
 
 namespace CredentialProvider.Devcontainer;
 
@@ -22,6 +24,11 @@ public static class Program
         "/usr/local/bin/ado-auth-helper",
         "/usr/local/bin/azure-auth-helper"
     ];
+
+    private static readonly string TwoFactorSecretPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".nuget-credprovider-2fa-secret"
+    );
 
     /// <summary>
     /// Gets the version from the assembly's InformationalVersion attribute (set by MinVer).
@@ -55,11 +62,17 @@ public static class Program
             Console.WriteLine("NuGet Credential Provider for Devcontainers");
             Console.WriteLine();
             Console.WriteLine("Usage:");
-            Console.WriteLine("  CredentialProvider.Devcontainer -Plugin     Run as NuGet plugin");
-            Console.WriteLine("  CredentialProvider.Devcontainer --test      Test credential acquisition");
-            Console.WriteLine("  CredentialProvider.Devcontainer --version   Show version info");
+            Console.WriteLine("  CredentialProvider.Devcontainer -Plugin       Run as NuGet plugin");
+            Console.WriteLine("  CredentialProvider.Devcontainer --test        Test credential acquisition");
+            Console.WriteLine("  CredentialProvider.Devcontainer --setup-2fa   Setup/view 2FA configuration");
+            Console.WriteLine("  CredentialProvider.Devcontainer --version     Show version info");
             Console.WriteLine();
             return 0;
+        }
+
+        if (args.Contains("--setup-2fa"))
+        {
+            return SetupTwoFactorAuth();
         }
 
         if (args.Contains("--test"))
@@ -292,31 +305,158 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates TOTP (Time-based One-Time Password) for 2FA if configured.
-    /// Reads the TOTP secret from the NUGET_CREDPROVIDER_2FA_SECRET environment variable.
-    /// If not configured, validation passes (2FA is optional).
+    /// Gets or generates the 2FA TOTP secret.
+    /// Checks environment variable first, then persistent file, then generates new.
+    /// </summary>
+    internal static string GetOrCreateTwoFactorSecret()
+    {
+        // First check environment variable (for Codespaces secrets)
+        var envSecret = Environment.GetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET");
+        if (!string.IsNullOrWhiteSpace(envSecret))
+        {
+            return envSecret.Trim();
+        }
+
+        // Check persistent file
+        if (File.Exists(TwoFactorSecretPath))
+        {
+            try
+            {
+                var fileSecret = File.ReadAllText(TwoFactorSecretPath).Trim();
+                if (!string.IsNullOrWhiteSpace(fileSecret))
+                {
+                    return fileSecret;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Warning: Could not read 2FA secret file: {ex.Message}");
+            }
+        }
+
+        // Generate new secret
+        var secretBytes = KeyGeneration.GenerateRandomKey(20);
+        var secret = Base32Encoding.ToString(secretBytes);
+        
+        // Try to save it
+        try
+        {
+            File.WriteAllText(TwoFactorSecretPath, secret);
+            // Set file permissions to be readable only by owner (Unix-like systems)
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            {
+                File.SetUnixFileMode(TwoFactorSecretPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Generated new 2FA secret and saved to {TwoFactorSecretPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Warning: Could not save 2FA secret: {ex.Message}");
+        }
+
+        return secret;
+    }
+
+    /// <summary>
+    /// Setup or display 2FA configuration with QR code.
+    /// </summary>
+    internal static int SetupTwoFactorAuth()
+    {
+        Console.WriteLine($"CredentialProvider.Devcontainer v{GetVersion()}");
+        Console.WriteLine("Two-Factor Authentication Setup");
+        Console.WriteLine("================================");
+        Console.WriteLine();
+
+        var secret = GetOrCreateTwoFactorSecret();
+        
+        Console.WriteLine($"Secret: {secret}");
+        Console.WriteLine($"Stored in: {TwoFactorSecretPath}");
+        Console.WriteLine();
+
+        // Generate TOTP URI
+        var totpUri = $"otpauth://totp/NuGetCredProvider?secret={secret}&issuer=DevcontainerCredProvider";
+        
+        Console.WriteLine("Scan this QR code with your authenticator app:");
+        Console.WriteLine();
+
+        // Generate and display QR code
+        try
+        {
+            using var qrGenerator = new QRCodeGenerator();
+            using var qrCodeData = qrGenerator.CreateQrCode(totpUri, QRCodeGenerator.ECCLevel.Q);
+            using var qrCode = new AsciiQRCode(qrCodeData);
+            var qrCodeAsAscii = qrCode.GetGraphic(1);
+            Console.WriteLine(qrCodeAsAscii);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not generate QR code: {ex.Message}");
+            Console.WriteLine();
+            Console.WriteLine($"Manual setup URL: {totpUri}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Or enter this information manually in your authenticator app:");
+        Console.WriteLine($"  Account: NuGetCredProvider");
+        Console.WriteLine($"  Secret: {secret}");
+        Console.WriteLine($"  Type: Time-based (TOTP)");
+        Console.WriteLine();
+
+        // Show current code for verification
+        try
+        {
+            var secretBytes = Base32Encoding.ToBytes(secret);
+            var totp = new Totp(secretBytes);
+            var currentCode = totp.ComputeTotp();
+            Console.WriteLine($"Current code (for verification): {currentCode}");
+            Console.WriteLine("This code changes every 30 seconds.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not generate current code: {ex.Message}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("To use 2FA:");
+        Console.WriteLine("  1. Scan the QR code or enter the secret in your authenticator app");
+        Console.WriteLine("  2. Set NUGET_CREDPROVIDER_2FA_ENABLED=true in your environment");
+        Console.WriteLine("  3. Provide the current code via NUGET_CREDPROVIDER_2FA_CODE when prompted");
+        Console.WriteLine();
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Validates TOTP (Time-based One-Time Password) for 2FA if enabled.
+    /// Checks NUGET_CREDPROVIDER_2FA_ENABLED to determine if 2FA should be used.
+    /// If enabled, gets secret and validates the provided code.
     /// </summary>
     internal static bool ValidateTwoFactorAuth()
     {
-        var totpSecret = Environment.GetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_SECRET");
+        var enabled = Environment.GetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_ENABLED");
         
-        if (string.IsNullOrWhiteSpace(totpSecret))
+        if (string.IsNullOrWhiteSpace(enabled) || !bool.TryParse(enabled, out var isEnabled) || !isEnabled)
         {
-            // 2FA not configured, skip validation
-            Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA not configured, skipping validation");
+            // 2FA not enabled, skip validation
             return true;
         }
+
+        Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA enabled, validating...");
 
         var totpCode = Environment.GetEnvironmentVariable("NUGET_CREDPROVIDER_2FA_CODE");
         
         if (string.IsNullOrWhiteSpace(totpCode))
         {
-            Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA configured but no code provided in NUGET_CREDPROVIDER_2FA_CODE");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA enabled but no code provided in NUGET_CREDPROVIDER_2FA_CODE");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Run 'dotnet {typeof(Program).Assembly.Location} --setup-2fa' to configure 2FA");
             return false;
         }
 
         try
         {
+            // Get or create the secret
+            var totpSecret = GetOrCreateTwoFactorSecret();
+            
             // Decode the base32 secret and create TOTP generator
             var secretBytes = Base32Encoding.ToBytes(totpSecret);
             var totp = new Totp(secretBytes);
@@ -331,6 +471,8 @@ public static class Program
             else
             {
                 Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA validation failed - invalid code");
+                var currentCode = totp.ComputeTotp();
+                Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Expected code: {currentCode} (for debugging)");
             }
             
             return isValid;
