@@ -229,13 +229,12 @@ if [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
   echo ""
   echo "4. Configuring environment..."
   
-  PROFILE_SCRIPT="/etc/profile.d/nuget-credprovider.sh"
-  
   # Build plugin paths - must point to the actual plugin DLL, semicolon-separated (even on Linux)
   DEVCONTAINER_PLUGIN_DLL="$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll"
   AZURE_PLUGIN_DLL="$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft/CredentialProvider.Microsoft.dll"
   
-  # Check if we can write to /etc/profile.d
+  # Configure /etc/profile.d for interactive login shells (requires root)
+  PROFILE_SCRIPT="/etc/profile.d/nuget-credprovider.sh"
   if [ -w "/etc/profile.d" ] || [ "$(id -u)" = "0" ]; then
     cat >"$PROFILE_SCRIPT" <<ENVSCRIPT
 # Devcontainer Credential Provider - Non-interactive NuGet authentication
@@ -251,7 +250,37 @@ ENVSCRIPT
     chmod 644 "$PROFILE_SCRIPT"
     echo "   ✓ Configured $PROFILE_SCRIPT"
   else
-    echo "   ⚠ Cannot write to /etc/profile.d (not root). Add to your shell profile:"
+    echo "   ⚠ Skipping /etc/profile.d (not writable, not root)"
+  fi
+  
+  # Configure /etc/environment for non-interactive shells (requires root)
+  # This is read by PAM, systemd, and some VS Code extensions
+  if [ -w "/etc/environment" ] || [ "$(id -u)" = "0" ]; then
+    # Remove any existing NUGET_PLUGIN_PATHS line
+    grep -v '^NUGET_PLUGIN_PATHS=' /etc/environment > /tmp/environment.tmp 2>/dev/null || true
+    echo "NUGET_PLUGIN_PATHS=\"$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL\"" >> /tmp/environment.tmp
+    mv /tmp/environment.tmp /etc/environment
+    echo "   ✓ Configured /etc/environment (for non-interactive shells)"
+  else
+    echo "   ⚠ Skipping /etc/environment (not writable, not root)"
+  fi
+  
+  # Configure user's shell rc files (works without root)
+  for rcfile in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    if [ -f "$rcfile" ]; then
+      # Remove any existing NUGET_PLUGIN_PATHS line and add fresh
+      grep -v 'NUGET_PLUGIN_PATHS=' "$rcfile" > "$rcfile.tmp" 2>/dev/null || true
+      echo "" >> "$rcfile.tmp"
+      echo "# Devcontainer Credential Provider" >> "$rcfile.tmp"
+      echo "export NUGET_PLUGIN_PATHS=\"$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL\"" >> "$rcfile.tmp"
+      mv "$rcfile.tmp" "$rcfile"
+      echo "   ✓ Configured $rcfile"
+    fi
+  done
+  
+  # If nothing was configured, show manual instructions
+  if [ ! -w "/etc/profile.d" ] && [ "$(id -u)" != "0" ] && [ ! -f "$HOME/.bashrc" ] && [ ! -f "$HOME/.zshrc" ]; then
+    echo "   ⚠ Could not configure environment automatically. Add to your shell profile:"
     echo "   export NUGET_PLUGIN_PATHS=\"$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL\""
   fi
 else

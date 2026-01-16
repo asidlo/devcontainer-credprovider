@@ -97,7 +97,11 @@ echo "Configuring environment for terminal shells..."
 
 PROFILE_SCRIPT="/etc/profile.d/nuget-credprovider.sh"
 
-cat >"$PROFILE_SCRIPT" <<'ENVSCRIPT'
+# Build full DLL paths for plugin discovery
+DEVCONTAINER_PLUGIN_DLL="$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll"
+AZURE_PLUGIN_DLL="$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft/CredentialProvider.Microsoft.dll"
+
+cat >"$PROFILE_SCRIPT" <<ENVSCRIPT
 # Devcontainer Credential Provider - Non-interactive NuGet authentication
 
 # Force non-interactive mode for NuGet
@@ -106,11 +110,21 @@ export NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS="30"
 export NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS="30"
 
 # Set plugin paths so NuGet can find credential providers
+# Must point to actual DLL files, semicolon-separated (even on Linux)
 # Custom devcontainer provider is first, falls back to Microsoft's artifacts-credprovider
-export NUGET_PLUGIN_PATHS="/usr/local/share/nuget/plugins/custom;/usr/local/share/nuget/plugins/azure"
+export NUGET_PLUGIN_PATHS="$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL"
 ENVSCRIPT
 
 chmod 644 "$PROFILE_SCRIPT"
+
+# Also add to /etc/environment for non-interactive shells (used by C# DevKit, VS Code extensions)
+if [ -w "/etc/environment" ] || [ "$(id -u)" = "0" ]; then
+  # Remove any existing NUGET_PLUGIN_PATHS line
+  grep -v '^NUGET_PLUGIN_PATHS=' /etc/environment > /tmp/environment.tmp 2>/dev/null || true
+  echo "NUGET_PLUGIN_PATHS=\"$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL\"" >> /tmp/environment.tmp
+  mv /tmp/environment.tmp /etc/environment
+  echo "✓ Configured /etc/environment (for non-interactive shells)"
+fi
 
 echo "✓ Environment configured in $PROFILE_SCRIPT"
 

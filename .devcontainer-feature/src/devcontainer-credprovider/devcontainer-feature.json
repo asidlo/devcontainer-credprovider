@@ -15,6 +15,6 @@
     "NUGET_CREDENTIALPROVIDER_FORCE_CANSHOWDIALOG_TO": "true",
     "NUGET_PLUGIN_HANDSHAKE_TIMEOUT_IN_SECONDS": "30",
     "NUGET_PLUGIN_REQUEST_TIMEOUT_IN_SECONDS": "30",
-    "NUGET_PLUGIN_PATHS": "/usr/local/share/nuget/plugins/custom;/usr/local/share/nuget/plugins/azure"
+    "NUGET_PLUGIN_PATHS": "/usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer/CredentialProvider.Devcontainer.dll;/usr/local/share/nuget/plugins/azure/CredentialProvider.Microsoft/CredentialProvider.Microsoft.dll"
   }
 }
