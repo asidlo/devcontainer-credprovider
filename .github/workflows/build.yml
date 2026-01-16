@@ -225,17 +225,24 @@ jobs:
 
           ### Download Run Artifacts (this build)
 
-          Use the GitHub CLI to download artifacts from this workflow run:
+          Use the GitHub CLI to download artifacts from this workflow run.
 
           \`\`\`bash
           # Install GitHub CLI if needed: https://cli.github.com/
+          REPO="${{ github.repository }}"
+          RUN_ID="${{ github.run_id }}"
+          ARTIFACT_NAME="devcontainer-credprovider-tarball"
 
-          # Any platform (Linux, macOS, Windows with WSL):
-          gh run download ${{ github.run_id }} -n devcontainer-credprovider-tarball -R ${{ github.repository }} \
-            && mkdir -p /tmp/cred-provider \
+          ARTIFACT_ID=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
+            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | .id")
+
+          gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" > artifact.zip
+          unzip -p artifact.zip '*.tar.gz' > devcontainer-credprovider.tar.gz
+
+          mkdir -p /tmp/cred-provider \
             && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
+            && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz artifact.zip
           \`\`\`
           EOF
   release:
@@ -345,13 +352,15 @@ jobs:
 
             - .NET 8 runtime installed (required to run the credential provider)
             - Download: https://dotnet.microsoft.com/download/dotnet/8.0
-            - GitHub CLI installed (for private repo downloads): https://cli.github.com/
 
             ### Install (Linux/macOS)
 
             ```bash
-            # Using GitHub CLI (works with private repos)
-            gh release download ${{ steps.version.outputs.version }} -R ${{ github.repository }} -p "*.tar.gz" \
+            VERSION="${{ steps.version.outputs.version }}"
+            REPO="${{ github.repository }}"
+
+            curl -fL -o devcontainer-credprovider.tar.gz \
+              "https://github.com/${REPO}/releases/download/${VERSION}/devcontainer-credprovider.tar.gz" \
               && mkdir -p /tmp/cred-provider \
               && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
@@ -361,11 +370,17 @@ jobs:
             ### Install (Windows PowerShell)
 
             ```powershell
-            # Using GitHub CLI (works with private repos)
-            gh release download ${{ steps.version.outputs.version }} -R ${{ github.repository }} -p "*.zip"
-            Expand-Archive -Path "devcontainer-credprovider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
-            & "$env:TEMP\cred-provider\install.ps1"
-            Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "devcontainer-credprovider.zip"
+            $Version = "${{ steps.version.outputs.version }}"
+            $Repo = "${{ github.repository }}"
+            $ZipUrl = "https://github.com/$Repo/releases/download/$Version/devcontainer-credprovider.zip"
+            $ZipPath = "$PWD\devcontainer-credprovider.zip"
+            $Dest = "$env:TEMP\cred-provider"
+
+            Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath
+            Expand-Archive -Path $ZipPath -DestinationPath $Dest -Force
+            & "$Dest\install.ps1"
+            Remove-Item -Recurse -Force $Dest
+            Remove-Item -Force $ZipPath
             ```
 
             ### After Installation
@@ -374,7 +389,7 @@ jobs:
 
             It tries these methods in order:
             1. `~/ado-auth-helper` (devcontainer auth helper)
-            2. Azure.Identity DefaultAzureCredential (Azure CLI, managed identity, etc.)
+            2. Microsoft's `artifacts-credprovider` (device code flow fallback)
           files: ./artifacts/*
           draft: true  # Create as draft first to allow asset uploads with immutable releases
           prerelease: false
