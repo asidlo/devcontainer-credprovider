@@ -8,7 +8,6 @@
 
 using System.Diagnostics;
 using System.Reflection;
-using System.Text;
 using NuGet.Protocol.Plugins;
 using OtpNet;
 using QRCoder;
