@@ -369,6 +369,8 @@ public static class Program
 
         var secret = GetOrCreateTwoFactorSecret();
         
+        Console.WriteLine("⚠️  WARNING: Keep your secret private! Do not share or commit it to source control.");
+        Console.WriteLine();
         Console.WriteLine($"Secret: {secret}");
         Console.WriteLine($"Stored in: {TwoFactorSecretPath}");
         Console.WriteLine();
@@ -448,7 +450,7 @@ public static class Program
         if (string.IsNullOrWhiteSpace(totpCode))
         {
             Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA enabled but no code provided in NUGET_CREDPROVIDER_2FA_CODE");
-            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Run 'dotnet {typeof(Program).Assembly.Location} --setup-2fa' to configure 2FA");
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Run: dotnet <path-to-dll> --setup-2fa");
             return false;
         }
 
@@ -471,8 +473,8 @@ public static class Program
             else
             {
                 Console.Error.WriteLine("[CredentialProvider.Devcontainer] 2FA validation failed - invalid code");
-                var currentCode = totp.ComputeTotp();
-                Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Expected code: {currentCode} (for debugging)");
+                // Don't log the expected code in production for security reasons
+                // Users can run --setup-2fa to see the current code
             }
             
             return isValid;
