@@ -5,12 +5,113 @@
 // This plugin only uses auth helpers (ado-auth-helper, azure-auth-helper).
 // If auth helpers are not available or fail, it returns NotApplicable to allow
 // fallback to other credential providers like Microsoft's artifacts-credprovider.
+//
+// Configuration:
+//   Environment variables:
+//     DEVCONTAINER_CREDPROVIDER_DISABLED=true     - Disable plugin (for testing fallback)
+//     DEVCONTAINER_CREDPROVIDER_VERBOSITY=debug   - Enable verbose logging
+//   Config file (~/.config/devcontainer-credprovider/config.json):
+//     { "disabled": true, "verbosity": "debug" }
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 using NuGet.Protocol.Plugins;
 
 namespace CredentialProvider.Devcontainer;
+
+/// <summary>
+/// Configuration for the credential provider, loaded from environment variables and config file.
+/// </summary>
+internal class PluginConfig
+{
+    private static PluginConfig? _instance;
+    private static readonly object _lock = new();
+
+    public bool Disabled { get; set; }
+    public string Verbosity { get; set; } = "normal";
+
+    /// <summary>
+    /// Config file path: ~/.config/devcontainer-credprovider/config.json
+    /// </summary>
+    public static string ConfigFilePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".config", "devcontainer-credprovider", "config.json");
+
+    /// <summary>
+    /// Gets the singleton configuration instance, loading from env vars and config file.
+    /// </summary>
+    public static PluginConfig Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                lock (_lock)
+                {
+                    _instance ??= Load();
+                }
+            }
+            return _instance;
+        }
+    }
+
+    /// <summary>
+    /// Reloads the configuration (useful for testing).
+    /// </summary>
+    public static void Reload()
+    {
+        lock (_lock)
+        {
+            _instance = Load();
+        }
+    }
+
+    private static PluginConfig Load()
+    {
+        var config = new PluginConfig();
+
+        // Load from config file first (if exists)
+        try
+        {
+            if (File.Exists(ConfigFilePath))
+            {
+                var json = File.ReadAllText(ConfigFilePath);
+                var fileConfig = JsonSerializer.Deserialize<PluginConfig>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (fileConfig != null)
+                {
+                    config = fileConfig;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore config file errors, use defaults
+        }
+
+        // Environment variables override config file
+        var disabledEnv = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED");
+        if (!string.IsNullOrEmpty(disabledEnv))
+        {
+            config.Disabled = disabledEnv.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                              disabledEnv.Equals("1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var verbosityEnv = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY");
+        if (!string.IsNullOrEmpty(verbosityEnv))
+        {
+            config.Verbosity = verbosityEnv.ToLowerInvariant();
+        }
+
+        return config;
+    }
+
+    public bool IsVerbose => Verbosity.Equals("debug", StringComparison.OrdinalIgnoreCase) ||
+                             Verbosity.Equals("verbose", StringComparison.OrdinalIgnoreCase);
+}
 
 public static class Program
 {
@@ -35,14 +136,29 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
-        // Always log when the process starts to help with debugging
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process started with args: [{string.Join(", ", args)}]");
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process ID: {Environment.ProcessId}");
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Version: {GetVersion()}");
+        var config = PluginConfig.Instance;
+
+        if (config.IsVerbose)
+        {
+            // Always log when the process starts to help with debugging
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process started with args: [{string.Join(", ", args)}]");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process ID: {Environment.ProcessId}");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Version: {GetVersion()}");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Config: Disabled={config.Disabled}, Verbosity={config.Verbosity}");
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Config file path: {PluginConfig.ConfigFilePath}");
+        }
 
         // Handle -Plugin argument (required for NuGet to recognize this as a credential provider)
         if (args.Contains("-Plugin", StringComparer.OrdinalIgnoreCase))
         {
+            // Check if plugin is disabled via config
+            if (config.Disabled)
+            {
+                Console.Error.WriteLine("[CredentialProvider.Devcontainer] Plugin is DISABLED via configuration, returning immediately to allow fallback");
+                // Return success but don't start - NuGet will fallback to other providers
+                // We need to still respond to handshake but return NotApplicable for all credential requests
+                return await RunAsDisabledPluginAsync();
+            }
             return await RunAsPluginAsync();
         }
 
@@ -62,7 +178,33 @@ public static class Program
             Console.WriteLine("  CredentialProvider.Devcontainer -Plugin     Run as NuGet plugin");
             Console.WriteLine("  CredentialProvider.Devcontainer --test      Test credential acquisition");
             Console.WriteLine("  CredentialProvider.Devcontainer --version   Show version info");
+            Console.WriteLine("  CredentialProvider.Devcontainer --config    Show current configuration");
             Console.WriteLine();
+            Console.WriteLine("Configuration:");
+            Console.WriteLine("  Environment variables:");
+            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_DISABLED=true   Disable plugin (for testing fallback)");
+            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_VERBOSITY=debug Enable verbose logging");
+            Console.WriteLine();
+            Console.WriteLine($"  Config file: {PluginConfig.ConfigFilePath}");
+            Console.WriteLine("    { \"disabled\": true, \"verbosity\": \"debug\" }");
+            Console.WriteLine();
+            return 0;
+        }
+
+        if (args.Contains("--config"))
+        {
+            Console.WriteLine($"CredentialProvider.Devcontainer v{GetVersion()} - Configuration");
+            Console.WriteLine();
+            Console.WriteLine($"Config file path: {PluginConfig.ConfigFilePath}");
+            Console.WriteLine($"Config file exists: {File.Exists(PluginConfig.ConfigFilePath)}");
+            Console.WriteLine();
+            Console.WriteLine("Current settings:");
+            Console.WriteLine($"  Disabled: {config.Disabled}");
+            Console.WriteLine($"  Verbosity: {config.Verbosity}");
+            Console.WriteLine();
+            Console.WriteLine("Environment variables:");
+            Console.WriteLine($"  DEVCONTAINER_CREDPROVIDER_DISABLED: {Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED") ?? "(not set)"}");
+            Console.WriteLine($"  DEVCONTAINER_CREDPROVIDER_VERBOSITY: {Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY") ?? "(not set)"}");
             return 0;
         }
 
@@ -159,7 +301,7 @@ public static class Program
             }
 
             Console.Error.WriteLine("[CredentialProvider.Devcontainer] Plugin shutting down...");
-            
+
             // Dispose is handled by 'using' statement above
 
             return 0;
@@ -167,6 +309,77 @@ public static class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Plugin error: {ex}");
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// Runs the plugin in disabled mode - responds to protocol but returns NotApplicable for all credential requests.
+    /// This allows testing fallback to other credential providers.
+    /// </summary>
+    private static async Task<int> RunAsDisabledPluginAsync()
+    {
+        Console.Error.WriteLine("[CredentialProvider.Devcontainer] Running in DISABLED mode - all requests will return NotApplicable");
+
+        try
+        {
+            // Create request handlers that always return NotApplicable
+            var requestHandlers = new RequestHandlers();
+
+            // Use disabled handlers that return NotApplicable
+            requestHandlers.TryAdd(MessageMethod.GetAuthenticationCredentials, new DisabledGetAuthenticationCredentialsRequestHandler());
+            requestHandlers.TryAdd(MessageMethod.GetOperationClaims, new DisabledGetOperationClaimsRequestHandler());
+            requestHandlers.TryAdd(MessageMethod.SetLogLevel, new SetLogLevelRequestHandler());
+            requestHandlers.TryAdd(MessageMethod.Initialize, new InitializeRequestHandler());
+            requestHandlers.TryAdd(MessageMethod.Close, new CloseRequestHandler());
+
+            var options = ConnectionOptions.CreateDefault();
+
+            using var cts = new CancellationTokenSource();
+
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            using var plugin = await PluginFactory.CreateFromCurrentProcessAsync(
+                requestHandlers,
+                options,
+                cts.Token);
+
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Disabled plugin connected, protocol version: {plugin.Connection.ProtocolVersion}");
+
+            var connectionClosed = new TaskCompletionSource<bool>();
+            plugin.Connection.Faulted += (sender, args) =>
+            {
+                connectionClosed.TrySetResult(true);
+            };
+
+            plugin.Closed += (sender, args) =>
+            {
+                Console.Error.WriteLine("[CredentialProvider.Devcontainer] Disabled plugin closed by client");
+                connectionClosed.TrySetResult(true);
+            };
+
+            try
+            {
+                await Task.WhenAny(
+                    connectionClosed.Task,
+                    Task.Delay(Timeout.InfiniteTimeSpan, cts.Token)
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected
+            }
+
+            Console.Error.WriteLine("[CredentialProvider.Devcontainer] Disabled plugin shutting down...");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Disabled plugin error: {ex}");
             return 1;
         }
     }
@@ -305,7 +518,7 @@ internal sealed class GetOperationClaimsRequestHandler : IRequestHandler
         var payload = MessageUtilities.DeserializePayload<GetOperationClaimsRequest>(request);
         var packageSourceUri = payload?.PackageSourceRepository;
 
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] ============== GetOperationClaims REQUEST ==============" );
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] ============== GetOperationClaims REQUEST ==============");
         Console.Error.WriteLine($"[CredentialProvider.Devcontainer] PackageSourceRepository: '{packageSourceUri}'");
         Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Request ID: {request?.RequestId}");
         Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Process ID: {Environment.ProcessId}");
@@ -353,7 +566,7 @@ internal sealed class GetAuthenticationCredentialsRequestHandler : IRequestHandl
         var payload = MessageUtilities.DeserializePayload<GetAuthenticationCredentialsRequest>(request);
         var uri = payload?.Uri?.AbsoluteUri;
 
-        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] ============== GetAuthenticationCredentials REQUEST ==============" );
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] ============== GetAuthenticationCredentials REQUEST ==============");
         Console.Error.WriteLine($"[CredentialProvider.Devcontainer] URI: {uri}");
         Console.Error.WriteLine($"[CredentialProvider.Devcontainer] IsRetry: {payload?.IsRetry}");
         Console.Error.WriteLine($"[CredentialProvider.Devcontainer] Request ID: {request?.RequestId}");
@@ -472,5 +685,55 @@ internal sealed class CloseRequestHandler : IRequestHandler
         // Acknowledge the close request
         // The plugin will exit after responding
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Disabled handler for GetAuthenticationCredentials - always returns NotApplicable to force fallback
+/// </summary>
+internal sealed class DisabledGetAuthenticationCredentialsRequestHandler : IRequestHandler
+{
+    public CancellationToken CancellationToken => CancellationToken.None;
+
+    public Task HandleResponseAsync(
+        IConnection connection,
+        Message request,
+        IResponseHandler responseHandler,
+        CancellationToken cancellationToken)
+    {
+        var payload = MessageUtilities.DeserializePayload<GetAuthenticationCredentialsRequest>(request);
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] DISABLED - Returning NotApplicable for: {payload?.Uri}");
+
+        var response = new GetAuthenticationCredentialsResponse(
+            username: null,
+            password: null,
+            message: "Plugin disabled via DEVCONTAINER_CREDPROVIDER_DISABLED or config file. Falling back to other providers.",
+            authenticationTypes: null,
+            responseCode: MessageResponseCode.NotFound);
+
+        return responseHandler.SendResponseAsync(request, response, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Disabled handler for GetOperationClaims - returns empty claims to indicate no capability
+/// </summary>
+internal sealed class DisabledGetOperationClaimsRequestHandler : IRequestHandler
+{
+    public CancellationToken CancellationToken => CancellationToken.None;
+
+    public Task HandleResponseAsync(
+        IConnection connection,
+        Message request,
+        IResponseHandler responseHandler,
+        CancellationToken cancellationToken)
+    {
+        var payload = MessageUtilities.DeserializePayload<GetOperationClaimsRequest>(request);
+        Console.Error.WriteLine($"[CredentialProvider.Devcontainer] DISABLED - Returning no claims for: '{payload?.PackageSourceRepository}'");
+
+        // Return empty claims - we don't claim to handle anything when disabled
+        var response = new GetOperationClaimsResponse(new List<OperationClaim>());
+
+        return responseHandler.SendResponseAsync(request, response, cancellationToken);
     }
 }
