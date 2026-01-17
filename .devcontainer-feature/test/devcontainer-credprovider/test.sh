@@ -47,16 +47,16 @@ else
     echo "⚠ dotnet not available, skipping execution test"
 fi
 
-# Check if NUGET_PLUGIN_PATH is configured
+# Check if NUGET_PLUGIN_PATHS is configured
 if [ -f "/etc/profile.d/nuget-credprovider.sh" ]; then
     echo "✓ Environment configuration file exists"
     
     # Source the file and check the variable
     source /etc/profile.d/nuget-credprovider.sh
-    if [[ "$NUGET_PLUGIN_PATH" == *"/usr/local/share/nuget/plugins/custom"* ]]; then
-        echo "✓ NUGET_PLUGIN_PATH includes custom plugin directory"
+    if [[ "$NUGET_PLUGIN_PATHS" == *"/usr/local/share/nuget/plugins/custom"* ]]; then
+        echo "✓ NUGET_PLUGIN_PATHS includes custom plugin directory"
     else
-        echo "⚠ NUGET_PLUGIN_PATH may not include custom plugin directory"
+        echo "⚠ NUGET_PLUGIN_PATHS may not include custom plugin directory"
     fi
 else
     echo "⚠ Environment configuration file not found"

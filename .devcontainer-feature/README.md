@@ -23,10 +23,10 @@ This feature installs two credential providers:
 1. **Devcontainer Credential Provider** (this plugin) - Uses auth helpers for silent authentication
 2. **Microsoft artifacts-credprovider** - Fallback for device code flow when auth helpers are unavailable
 
-The `NUGET_PLUGIN_PATH` is automatically set to check the devcontainer provider first, then fall back to artifacts-credprovider:
+The `NUGET_PLUGIN_PATHS` is automatically set to check the devcontainer provider first, then fall back to artifacts-credprovider:
 
 ```bash
-NUGET_PLUGIN_PATH="/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/plugins/azure"
+NUGET_PLUGIN_PATHS="/usr/local/share/nuget/plugins/custom;/usr/local/share/nuget/plugins/azure"
 ```
 
 ## Requirements
@@ -46,7 +46,7 @@ NUGET_PLUGIN_PATH="/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/
 
 1. Installs the devcontainer credential provider to `/usr/local/share/nuget/plugins/custom/`
 2. Installs Microsoft's artifacts-credprovider to `/usr/local/share/nuget/plugins/azure/`
-3. Configures `NUGET_PLUGIN_PATH` to use both providers (via `containerEnv`)
+3. Configures `NUGET_PLUGIN_PATHS` to use both providers (via `containerEnv`)
 4. Configures NuGet environment variables for non-interactive authentication
 5. Verifies the installation
 

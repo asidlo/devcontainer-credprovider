@@ -26,12 +26,12 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0  # Full history needed for MinVer to find tags
           fetch-tags: true  # Explicitly fetch all tags
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 8.x
       
@@ -114,14 +114,14 @@ jobs:
       
       - name: Upload coverage report
         if: steps.generate-coverage.outputs.report-generated == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-report
           path: ./coverage/report
       
       - name: Add coverage PR comment
         if: github.event_name == 'pull_request' && steps.generate-coverage.outputs.report-generated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           script: |
             const fs = require('fs');
@@ -198,12 +198,12 @@ jobs:
           cd ./publish
           zip -r devcontainer-credprovider.zip install.ps1 uninstall.ps1 netcore/
       - name: Upload tarball artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: devcontainer-credprovider-tarball
           path: ./publish/devcontainer-credprovider.tar.gz
       - name: Upload zip artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: devcontainer-credprovider-zip
           path: ./publish/devcontainer-credprovider.zip
@@ -225,17 +225,22 @@ jobs:
 
           ### Download Run Artifacts (this build)
 
-          Use the GitHub CLI to download artifacts from this workflow run:
+          Use the GitHub CLI to download artifacts from this workflow run.
 
           \`\`\`bash
-          # Install GitHub CLI if needed: https://cli.github.com/
+          # Install GitHub CLI if needed: https://cli.github.com/ and login
+          gh auth login
 
-          # Any platform (Linux, macOS, Windows with WSL):
-          gh run download ${{ github.run_id }} -n devcontainer-credprovider-tarball -R ${{ github.repository }} \
-            && mkdir -p /tmp/cred-provider \
+          # Download to a specific directory to avoid path traversal issues
+          gh run download ${{ github.run_id }} -n devcontainer-credprovider-tarball -R ${{ github.repository }} -D /tmp/artifact
+
+          # Move the tarball to current directory
+          mv /tmp/artifact/devcontainer-credprovider.tar.gz ./
+
+          mkdir -p /tmp/cred-provider \
             && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
             && /tmp/cred-provider/install.sh \
-            && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
+            && rm -rf /tmp/cred-provider /tmp/artifact devcontainer-credprovider.tar.gz
           \`\`\`
           EOF
   release:
@@ -260,11 +265,18 @@ jobs:
           echo "version_num=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "🏷️ Release version: $VERSION" >> $GITHUB_STEP_SUMMARY
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - name: Download tarball artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
+          name: devcontainer-credprovider-tarball
           path: ./artifacts
-          merge-multiple: true
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: devcontainer-credprovider-zip
+          path: ./artifacts
+
       - name: List artifacts
         run: ls -la ./artifacts/
 
@@ -279,7 +291,7 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
 
       - name: Sign release artifacts (keyless)
         run: |
@@ -292,13 +304,52 @@ jobs:
               "$f"
           done
           echo "✅ Signed artifacts with Sigstore (keyless)" >> $GITHUB_STEP_SUMMARY
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      
+      - name: Check for existing release
+        id: check-release
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Check if release exists and if it's editable
+          RELEASE_INFO=$(gh release view "$VERSION" --json isDraft,assets 2>/dev/null || echo "NOT_FOUND")
+          
+          if [ "$RELEASE_INFO" = "NOT_FOUND" ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "📦 No existing release found for $VERSION" >> $GITHUB_STEP_SUMMARY
+          else
+            IS_DRAFT=$(echo "$RELEASE_INFO" | jq -r '.isDraft')
+            ASSET_COUNT=$(echo "$RELEASE_INFO" | jq '.assets | length')
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
+            echo "asset_count=$ASSET_COUNT" >> $GITHUB_OUTPUT
+            
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "can_update=true" >> $GITHUB_OUTPUT
+              echo "📦 Existing draft release found - will update" >> $GITHUB_STEP_SUMMARY
+            elif [ "$ASSET_COUNT" = "0" ]; then
+              # Published release with no assets - delete and recreate
+              echo "📦 Existing release has no assets - deleting to recreate" >> $GITHUB_STEP_SUMMARY
+              gh release delete "$VERSION" --yes
+              echo "exists=false" >> $GITHUB_OUTPUT
+              echo "can_update=true" >> $GITHUB_OUTPUT
+            else
+              echo "can_update=false" >> $GITHUB_OUTPUT
+              echo "⚠️ Release $VERSION already exists with $ASSET_COUNT assets - skipping upload" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # With immutable releases enabled, we must create as draft first, then publish
+      - name: Create Draft GitHub Release
+        id: create-release
+        if: steps.check-release.outputs.exists != 'true' || steps.check-release.outputs.can_update == 'true'
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
           generate_release_notes: true
           append_body: true
+          fail_on_unmatched_files: true
           body: |
             ---
 
@@ -306,13 +357,37 @@ jobs:
 
             - .NET 8 runtime installed (required to run the credential provider)
             - Download: https://dotnet.microsoft.com/download/dotnet/8.0
-            - GitHub CLI installed (for private repo downloads): https://cli.github.com/
+
+            ### Install as Devcontainer Feature (Recommended)
+
+            Add to your `.devcontainer/devcontainer.json`:
+
+            ```json
+            {
+              "features": {
+                "ghcr.io/${{ github.repository }}/devcontainer-credprovider:${{ steps.version.outputs.version_num }}": {}
+              }
+            }
+            ```
+
+            Or use `latest` for the most recent version:
+
+            ```json
+            {
+              "features": {
+                "ghcr.io/${{ github.repository }}/devcontainer-credprovider:latest": {}
+              }
+            }
+            ```
 
             ### Install (Linux/macOS)
 
             ```bash
-            # Using GitHub CLI (works with private repos)
-            gh release download ${{ steps.version.outputs.version }} -R ${{ github.repository }} -p "*.tar.gz" \
+            VERSION="${{ steps.version.outputs.version }}"
+            REPO="${{ github.repository }}"
+
+            curl -fL -o devcontainer-credprovider.tar.gz \
+              "https://github.com/${REPO}/releases/download/${VERSION}/devcontainer-credprovider.tar.gz" \
               && mkdir -p /tmp/cred-provider \
               && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
               && /tmp/cred-provider/install.sh \
@@ -322,11 +397,17 @@ jobs:
             ### Install (Windows PowerShell)
 
             ```powershell
-            # Using GitHub CLI (works with private repos)
-            gh release download ${{ steps.version.outputs.version }} -R ${{ github.repository }} -p "*.zip"
-            Expand-Archive -Path "devcontainer-credprovider.zip" -DestinationPath "$env:TEMP\cred-provider" -Force
-            & "$env:TEMP\cred-provider\install.ps1"
-            Remove-Item -Recurse -Force "$env:TEMP\cred-provider", "devcontainer-credprovider.zip"
+            $Version = "${{ steps.version.outputs.version }}"
+            $Repo = "${{ github.repository }}"
+            $ZipUrl = "https://github.com/$Repo/releases/download/$Version/devcontainer-credprovider.zip"
+            $ZipPath = "$PWD\devcontainer-credprovider.zip"
+            $Dest = "$env:TEMP\cred-provider"
+
+            Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath
+            Expand-Archive -Path $ZipPath -DestinationPath $Dest -Force
+            & "$Dest\install.ps1"
+            Remove-Item -Recurse -Force $Dest
+            Remove-Item -Force $ZipPath
             ```
 
             ### After Installation
@@ -335,10 +416,37 @@ jobs:
 
             It tries these methods in order:
             1. `~/ado-auth-helper` (devcontainer auth helper)
-            2. Azure.Identity DefaultAzureCredential (Azure CLI, managed identity, etc.)
+            2. Microsoft's `artifacts-credprovider` (device code flow fallback)
+
+            ### Configuration
+
+            To disable the plugin (for testing fallback behavior):
+
+            ```bash
+            export DEVCONTAINER_CREDPROVIDER_DISABLED=true
+            ```
+
+            Or create a config file at `~/.config/devcontainer-credprovider/config.json`:
+
+            ```json
+            { "disabled": true, "verbosity": "debug" }
+            ```
           files: ./artifacts/*
-          draft: false
+          draft: true  # Create as draft first to allow asset uploads with immutable releases
           prerelease: false
+      
+      - name: Publish Release
+        if: steps.create-release.outputs.id != ''
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ steps.create-release.outputs.id }},
+              draft: false
+            });
+            console.log('✅ Published release ${{ steps.version.outputs.version }}');
 
   # Publish the devcontainer feature after creating a release
   publish-feature:
@@ -347,3 +455,4 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write  # Required by called workflow (only used on PR triggers)
