@@ -114,7 +114,7 @@ jobs:
       
       - name: Upload coverage report
         if: steps.generate-coverage.outputs.report-generated == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: coverage-report
           path: ./coverage/report
@@ -198,12 +198,12 @@ jobs:
           cd ./publish
           zip -r devcontainer-credprovider.zip install.ps1 uninstall.ps1 netcore/
       - name: Upload tarball artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: devcontainer-credprovider-tarball
           path: ./publish/devcontainer-credprovider.tar.gz
       - name: Upload zip artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: devcontainer-credprovider-zip
           path: ./publish/devcontainer-credprovider.zip
