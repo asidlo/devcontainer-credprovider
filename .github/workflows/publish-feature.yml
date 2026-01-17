@@ -3,6 +3,9 @@ name: Publish Devcontainer Feature
 on:
   release:
     types: [published]
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened, closed]  # Include closed for cleanup
   workflow_call:  # Allow calling from other workflows
   workflow_dispatch:
     inputs:
@@ -17,25 +20,80 @@ permissions:
   packages: read
 
 jobs:
+  # Cleanup PR preview versions when PR is closed
+  cleanup:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete PR preview package version
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const version = `0.0.0-pr.${prNumber}`;
+            const packageName = 'features/devcontainer-credprovider';
+            
+            console.log(`🧹 Cleaning up preview version: ${version}`);
+            
+            try {
+              // List package versions to find the one matching our PR
+              const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                package_type: 'container',
+                package_name: packageName,
+                username: context.repo.owner,
+                per_page: 100
+              });
+              
+              const prVersion = versions.data.find(v => 
+                v.metadata?.container?.tags?.includes(version)
+              );
+              
+              if (prVersion) {
+                await github.rest.packages.deletePackageVersionForUser({
+                  package_type: 'container',
+                  package_name: packageName,
+                  username: context.repo.owner,
+                  package_version_id: prVersion.id
+                });
+                console.log(`✅ Deleted preview version ${version}`);
+              } else {
+                console.log(`ℹ️ No preview version found for ${version}`);
+              }
+            } catch (error) {
+              // Don't fail the workflow if cleanup fails
+              console.log(`⚠️ Could not delete preview version: ${error.message}`);
+            }
+      
+      - name: Summary
+        run: |
+          echo "## 🧹 PR Preview Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Cleaned up preview version \`0.0.0-pr.${{ github.event.pull_request.number }}\`" >> $GITHUB_STEP_SUMMARY
+
   publish:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      pull-requests: write  # For PR comments
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-tags: true
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "8.0.x"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
 
@@ -51,9 +109,20 @@ jobs:
             -o ./publish/netcore
           
           # Extract version from the built assembly (set by MinVer)
-          VERSION=$(dotnet ./publish/netcore/CredentialProvider.Devcontainer.dll --version | awk '{print $2}' | cut -d'+' -f1)
+          BASE_VERSION=$(dotnet ./publish/netcore/CredentialProvider.Devcontainer.dll --version | awk '{print $2}' | cut -d'+' -f1)
+          
+          # For PRs, use a prerelease version to avoid overwriting stable releases
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            VERSION="0.0.0-pr.${{ github.event.pull_request.number }}"
+            echo "🔧 PR build - using preview version: $VERSION"
+          else
+            VERSION="$BASE_VERSION"
+            echo "📦 Release build - using version: $VERSION"
+          fi
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📦 Credential Provider Version: $VERSION"
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "is_pr=${{ github.event_name == 'pull_request' }}" >> $GITHUB_OUTPUT
 
       - name: Embed binaries in feature
         run: |
@@ -82,7 +151,7 @@ jobs:
           ls -la "$FEATURE_DIR/netcore/"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -93,7 +162,7 @@ jobs:
           cd .devcontainer-feature
           devcontainer features publish \
             --registry ghcr.io \
-            --namespace asidlo/features/devcontainer-credprovider \
+            --namespace ${{ github.repository_owner }}/features \
             ./src
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,26 +170,82 @@ jobs:
       - name: Summary
         run: |
           VERSION="${{ steps.build.outputs.version }}"
+          FEATURE_REF="ghcr.io/${{ github.repository_owner }}/features/devcontainer-credprovider:$VERSION"
+          
           echo "## 📦 Devcontainer Feature Published!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **This is a PR preview build.** Use this version for testing only." >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The feature is now available at:" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
-          echo "{" >> $GITHUB_STEP_SUMMARY
-          echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
-          echo "    \"ghcr.io/asidlo/features/devcontainer-credprovider\": {}" >> $GITHUB_STEP_SUMMARY
-          echo "  }" >> $GITHUB_STEP_SUMMARY
-          echo "}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Or pin to this specific version:" >> $GITHUB_STEP_SUMMARY
+          echo "Add to your \`devcontainer.json\`:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
           echo "{" >> $GITHUB_STEP_SUMMARY
           echo "  \"features\": {" >> $GITHUB_STEP_SUMMARY
-          echo "    \"ghcr.io/asidlo/features/devcontainer-credprovider:$VERSION\": {}" >> $GITHUB_STEP_SUMMARY
+          echo "    \"$FEATURE_REF\": {}" >> $GITHUB_STEP_SUMMARY
           echo "  }" >> $GITHUB_STEP_SUMMARY
           echo "}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Add PR comment with feature reference
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const version = '${{ steps.build.outputs.version }}';
+            const featureRef = `ghcr.io/${{ github.repository_owner }}/features/devcontainer-credprovider:${version}`;
+            
+            const body = `## 🧪 Devcontainer Feature Preview
+            
+            A preview version of the devcontainer feature has been published for testing.
+            
+            **Version:** \`${version}\`
+            
+            ### Test this PR
+            
+            Add to your \`devcontainer.json\`:
+            
+            \`\`\`json
+            {
+              "features": {
+                "${featureRef}": {}
+              }
+            }
+            \`\`\`
+            
+            > ⚠️ This is a preview build. Do not use in production.`;
+            
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Devcontainer Feature Preview')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

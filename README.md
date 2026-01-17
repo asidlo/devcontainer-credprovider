@@ -116,7 +116,7 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 The feature automatically:
 - Installs the devcontainer credential provider to `/usr/local/share/nuget/plugins/custom/`
 - Installs Microsoft's artifacts-credprovider to `/usr/local/share/nuget/plugins/azure/`
-- Sets `NUGET_PLUGIN_PATH` so both CLI and C# DevKit can find the providers
+- Sets `NUGET_PLUGIN_PATHS` so both CLI and C# DevKit can find the providers
 
 ## Troubleshooting
 
@@ -132,14 +132,14 @@ ls -la /usr/local/share/nuget/plugins/azure/
 
 ### C# DevKit Integration
 
-The feature automatically sets `NUGET_PLUGIN_PATH` so C# DevKit will use the credential providers. No additional configuration needed.
+The feature automatically sets `NUGET_PLUGIN_PATHS` so C# DevKit will use the credential providers. No additional configuration needed.
 
 If you're not using the devcontainer feature and need to configure manually:
 
 ```json
 {
   "remoteEnv": {
-    "NUGET_PLUGIN_PATH": "/usr/local/share/nuget/plugins/custom:/usr/local/share/nuget/plugins/azure"
+    "NUGET_PLUGIN_PATHS": "/usr/local/share/nuget/plugins/custom;/usr/local/share/nuget/plugins/azure"
   }
 }
 ```

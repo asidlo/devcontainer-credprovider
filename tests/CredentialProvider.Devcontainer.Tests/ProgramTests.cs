@@ -183,4 +183,125 @@ public class ProgramTests
     }
 
     #endregion
+
+    #region Configuration
+
+    [Fact]
+    public async Task Main_Config_ReturnsZero()
+    {
+        Assert.Equal(0, await Program.Main(["--config"]));
+    }
+
+    [Fact]
+    public void PluginConfig_ConfigFilePath_ReturnsExpectedPath()
+    {
+        var path = PluginConfig.ConfigFilePath;
+        
+        Assert.NotEmpty(path);
+        Assert.Contains(".config", path);
+        Assert.Contains("devcontainer-credprovider", path);
+        Assert.EndsWith("config.json", path);
+    }
+
+    [Fact]
+    public void PluginConfig_Instance_ReturnsConfig()
+    {
+        var config = PluginConfig.Instance;
+        
+        Assert.NotNull(config);
+        Assert.NotNull(config.Verbosity);
+    }
+
+    [Fact]
+    public void PluginConfig_DisabledEnvVar_SetsDisabled()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED", "true");
+            PluginConfig.Reload();
+            
+            Assert.True(PluginConfig.Instance.Disabled);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_VerbosityEnvVar_SetsVerbosity()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "debug");
+            PluginConfig.Reload();
+            
+            Assert.Equal("debug", PluginConfig.Instance.Verbosity);
+            Assert.True(PluginConfig.Instance.IsVerbose);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_IsVerbose_ReturnsTrueForDebug()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "debug");
+            PluginConfig.Reload();
+            
+            Assert.True(PluginConfig.Instance.IsVerbose);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_IsVerbose_ReturnsTrueForVerbose()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "verbose");
+            PluginConfig.Reload();
+            
+            Assert.True(PluginConfig.Instance.IsVerbose);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_IsVerbose_ReturnsFalseForNormal()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "normal");
+            PluginConfig.Reload();
+            
+            Assert.False(PluginConfig.Instance.IsVerbose);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    #endregion
 }
