@@ -1,13 +1,13 @@
 Summary
-  Generated on: 01/19/2026 - 05:14:39
-  Coverage date: 01/19/2026 - 05:14:39
+  Generated on: 01/19/2026 - 05:18:27
+  Coverage date: 01/19/2026 - 05:18:26
   Parser: Cobertura
   Assemblies: 1
   Classes: 9
   Files: 9
-  Line coverage: 56.3%
-  Covered lines: 235
-  Uncovered lines: 182
+  Line coverage: 58.2%
+  Covered lines: 243
+  Uncovered lines: 174
   Coverable lines: 417
   Total lines: 779
   Branch coverage: 63.6% (70 of 110)
@@ -17,7 +17,7 @@ Summary
   Covered methods: 30
   Total methods: 32
 
-CredentialProvider.Devcontainer                                                                 56.3%
+CredentialProvider.Devcontainer                                                                 58.2%
   CredentialProvider.Devcontainer.Handlers.DisabledGetAuthenticationCredentialsRequestHandler  100.0%
   CredentialProvider.Devcontainer.Handlers.DisabledGetOperationClaimsRequestHandler            100.0%
   CredentialProvider.Devcontainer.Handlers.GetAuthenticationCredentialsRequestHandler           77.7%
@@ -25,5 +25,5 @@ CredentialProvider.Devcontainer                                                 
   CredentialProvider.Devcontainer.Handlers.InitializeRequestHandler                            100.0%
   CredentialProvider.Devcontainer.Handlers.PluginCloseRequestHandler                           100.0%
   CredentialProvider.Devcontainer.Handlers.SetLogLevelRequestHandler                           100.0%
-  CredentialProvider.Devcontainer.PluginConfig                                                  75.0%
+  CredentialProvider.Devcontainer.PluginConfig                                                  89.2%
   CredentialProvider.Devcontainer.Program                                                       38.9%

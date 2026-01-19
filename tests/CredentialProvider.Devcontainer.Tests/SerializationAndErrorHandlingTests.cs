@@ -5,6 +5,7 @@ namespace CredentialProvider.Devcontainer.Tests;
 /// <summary>
 /// Tests for serialization, deserialization, and error handling scenarios in the plugin.
 /// </summary>
+[Collection("PluginConfig")]  // Ensure tests don't run in parallel (due to static state)
 public class SerializationAndErrorHandlingTests
 {
     #region PluginConfig Serialization Tests
