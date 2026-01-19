@@ -52,7 +52,7 @@ public class PluginConfig
         }
     }
 
-    internal static PluginConfig Load()
+    private static PluginConfig Load()
     {
         var config = new PluginConfig();
 
