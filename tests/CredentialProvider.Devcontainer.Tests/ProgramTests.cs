@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CredentialProvider.Devcontainer.Handlers;
 
 namespace CredentialProvider.Devcontainer.Tests;
 
@@ -131,7 +132,7 @@ public class ProgramTests
         Assert.NotNull(new GetAuthenticationCredentialsRequestHandler());
         Assert.NotNull(new SetLogLevelRequestHandler());
         Assert.NotNull(new InitializeRequestHandler());
-        Assert.NotNull(new CloseRequestHandler());
+        Assert.NotNull(new PluginCloseRequestHandler());
     }
 
     #endregion
