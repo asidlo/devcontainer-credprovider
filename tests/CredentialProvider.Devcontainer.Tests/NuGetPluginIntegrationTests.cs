@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CredentialProvider.Devcontainer.Handlers;
 
 namespace CredentialProvider.Devcontainer.Tests;
 
@@ -57,7 +58,7 @@ public class NuGetPluginIntegrationTests
         var authCredsHandler = new GetAuthenticationCredentialsRequestHandler();
         var setLogLevelHandler = new SetLogLevelRequestHandler();
         var initializeHandler = new InitializeRequestHandler();
-        var closeHandler = new CloseRequestHandler();
+        var closeHandler = new PluginCloseRequestHandler();
 
         // Assert
         Assert.NotNull(operationClaimsHandler);

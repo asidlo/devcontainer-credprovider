@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using CredentialProvider.Devcontainer.Handlers;
 
 namespace CredentialProvider.Devcontainer.Tests;
 
 /// <summary>
 /// Focused tests for Program.cs covering main code paths.
 /// </summary>
+[Collection("PluginConfig")]  // Ensure tests don't run in parallel (due to static state)
 public class ProgramTests
 {
     #region GetVersion
@@ -131,7 +133,7 @@ public class ProgramTests
         Assert.NotNull(new GetAuthenticationCredentialsRequestHandler());
         Assert.NotNull(new SetLogLevelRequestHandler());
         Assert.NotNull(new InitializeRequestHandler());
-        Assert.NotNull(new CloseRequestHandler());
+        Assert.NotNull(new PluginCloseRequestHandler());
     }
 
     #endregion
