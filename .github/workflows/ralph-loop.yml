@@ -42,36 +42,36 @@ jobs:
         with:
           script: |
             const issueNumber = context.payload.issue?.number || ${{ github.event.inputs.issue_number || 0 }};
-            
+
             if (!issueNumber) {
               core.setFailed('No issue number found');
               return;
             }
-            
+
             // Get issue details
             const { data: issue } = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber
             });
-            
+
             core.setOutput('issue_number', issueNumber);
-            
+
             // Parse issue body to extract fields
             const body = issue.body || '';
-            
+
             // Extract completion requirement
             const completionMatch = body.match(/### Completion Requirement\s*\n\s*(.+?)(?:\n\n|$)/s);
             const completionRequirement = completionMatch ? completionMatch[1].trim() : '';
-            
+
             // Extract max iterations
             const iterationsMatch = body.match(/### Maximum Iterations\s*\n\s*(.+?)(?:\n\n|$)/s);
             const maxIterations = iterationsMatch ? parseInt(iterationsMatch[1].trim()) || 10 : 10;
-            
+
             core.setOutput('max_iterations', maxIterations);
             core.setOutput('completion_requirement', completionRequirement);
             core.setOutput('needs_completion_requirement', completionRequirement ? 'false' : 'true');
-            
+
             console.log(`Issue: ${issueNumber}`);
             console.log(`Max iterations: ${maxIterations}`);
             console.log(`Completion requirement: ${completionRequirement || 'NOT PROVIDED'}`);
@@ -82,22 +82,22 @@ jobs:
         with:
           script: |
             const issueNumber = ${{ steps.parse.outputs.issue_number }};
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `## ⚠️ Completion Requirement Missing
-              
+
               This Ralph task is missing a completion requirement. Please provide the specific criteria that must be met to consider this task complete.
-              
+
               **Please reply to this comment with:**
               - A clear description of what "done" looks like for this task
               - Specific, measurable criteria (e.g., "all tests pass", "feature X works as described")
-              
+
               Once you provide the completion requirement, the Ralph loop will begin.`
             });
-            
+
             core.setFailed('Completion requirement not provided in issue. Waiting for user response.');
 
       - name: Generate PRD
@@ -107,62 +107,62 @@ jobs:
         with:
           script: |
             const issueNumber = ${{ steps.parse.outputs.issue_number }};
-            
+
             const { data: issue } = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber
             });
-            
+
             const body = issue.body || '';
-            
+
             // Extract sections from issue
             const descriptionMatch = body.match(/### Task Description\s*\n\s*(.+?)(?:\n\n|###|$)/s);
             const requirementsMatch = body.match(/### Requirements\s*\n\s*(.+?)(?:\n\n|###|$)/s);
             const contextMatch = body.match(/### Additional Context\s*\n\s*(.+?)(?:\n\n|###|$)/s);
             const completionMatch = body.match(/### Completion Requirement\s*\n\s*(.+?)(?:\n\n|###|$)/s);
-            
+
             const description = descriptionMatch ? descriptionMatch[1].trim() : '';
             const requirements = requirementsMatch ? requirementsMatch[1].trim() : '';
             const context = contextMatch ? contextMatch[1].trim() : '';
             const completion = completionMatch ? completionMatch[1].trim() : '';
-            
+
             // Generate PRD
             const prd = `# Product Requirements Document
-            
+
             **Issue:** #${issueNumber} - ${issue.title}
             **Created:** ${new Date().toISOString()}
             **Status:** In Progress
-            
+
             ## Overview
-            
+
             ${description}
-            
+
             ## Requirements
-            
+
             ${requirements}
-            
+
             ## Completion Criteria
-            
+
             ${completion}
-            
+
             ${context ? `## Additional Context\n\n${context}\n` : ''}
             ## Implementation Notes
-            
+
             This task will be executed through an iterative Ralph loop process:
             - Maximum iterations: ${{ steps.parse.outputs.max_iterations }}
             - Learnings will be captured and maintained across iterations
             - Process will complete when completion criteria are met
-            
+
             ## Learnings
-            
+
             _Learnings will be updated throughout the development process._
             `;
-            
+
             const fs = require('fs');
             fs.mkdirSync('./docs/ralph-tasks', { recursive: true });
             fs.writeFileSync(`./docs/ralph-tasks/issue-${issueNumber}-prd.md`, prd);
-            
+
             console.log('PRD generated successfully');
             core.setOutput('prd_path', `docs/ralph-tasks/issue-${issueNumber}-prd.md`);
 
@@ -172,24 +172,25 @@ jobs:
         run: |
           ISSUE_NUM="${{ steps.parse.outputs.issue_number }}"
           LEARNINGS_PATH="docs/ralph-tasks/issue-${ISSUE_NUM}-learnings.md"
-          
-          cat > "$LEARNINGS_PATH" << 'EOF'
-          # Ralph Loop Learnings - Issue #${{ steps.parse.outputs.issue_number }}
-          
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          cat > "$LEARNINGS_PATH" << EOF
+          # Ralph Loop Learnings - Issue #${ISSUE_NUM}
+
           **Task:** ${{ github.event.issue.title || 'Ralph Task' }}
-          **Started:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Started:** ${TIMESTAMP}
           **Status:** In Progress
-          
+
           ## Iteration Log
-          
+
           ### Iteration 1
-          **Started:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Started:** ${TIMESTAMP}
           **Status:** Starting
-          
+
           Initial setup complete. Beginning Ralph loop iterations.
-          
+
           EOF
-          
+
           echo "learnings_path=$LEARNINGS_PATH" >> $GITHUB_OUTPUT
 
       - name: Commit PRD and learnings
@@ -207,27 +208,27 @@ jobs:
         with:
           script: |
             const issueNumber = ${{ steps.parse.outputs.issue_number }};
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `## 🚀 Ralph Loop Initialized
-              
+
               The Ralph loop has been initialized for this task.
-              
+
               **Configuration:**
               - Maximum iterations: ${{ steps.parse.outputs.max_iterations }}
               - Completion requirement: ${{ steps.parse.outputs.completion_requirement }}
-              
+
               **Documents created:**
               - PRD: \`docs/ralph-tasks/issue-${issueNumber}-prd.md\`
               - Learnings: \`docs/ralph-tasks/issue-${issueNumber}-learnings.md\`
-              
+
               The learnings document will be maintained across iterations and removed when the completion requirement is met.
-              
+
               ---
-              
+
               *Ready to begin iterative development. Iterations will continue until completion criteria are satisfied or maximum iterations reached.*`
             });
 
@@ -248,24 +249,24 @@ jobs:
         run: |
           ISSUE_NUM="${{ needs.initialize.outputs.issue_number }}"
           LEARNINGS_PATH="docs/ralph-tasks/issue-${ISSUE_NUM}-learnings.md"
-          
+
           if [ ! -f "$LEARNINGS_PATH" ]; then
             echo "Learnings file not found. May need to pull latest changes."
             git pull origin main || true
           fi
-          
+
           if [ ! -f "$LEARNINGS_PATH" ]; then
             echo "current_iteration=1" >> $GITHUB_OUTPUT
             echo "can_continue=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # Count iterations in learnings file
           CURRENT_ITERATION=$(grep -c "### Iteration" "$LEARNINGS_PATH" || echo "0")
           MAX_ITERATIONS="${{ needs.initialize.outputs.max_iterations }}"
-          
+
           echo "current_iteration=$CURRENT_ITERATION" >> $GITHUB_OUTPUT
-          
+
           if [ "$CURRENT_ITERATION" -ge "$MAX_ITERATIONS" ]; then
             echo "can_continue=false" >> $GITHUB_OUTPUT
             echo "reason=max_iterations_reached" >> $GITHUB_OUTPUT
@@ -281,21 +282,21 @@ jobs:
             const issueNumber = ${{ needs.initialize.outputs.issue_number }};
             const iteration = ${{ steps.check-iteration.outputs.current_iteration }};
             const maxIterations = ${{ needs.initialize.outputs.max_iterations }};
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `## 🔄 Ralph Loop Iteration ${iteration}/${maxIterations}
-              
+
               **Status:** Running iteration ${iteration}
-              
+
               This iteration will:
               1. Execute the planned work
               2. Capture learnings
               3. Evaluate against completion criteria
               4. Update learnings document
-              
+
               Check the learnings document for progress: \`docs/ralph-tasks/issue-${issueNumber}-learnings.md\``
             });
 
@@ -306,15 +307,15 @@ jobs:
           script: |
             const issueNumber = ${{ needs.initialize.outputs.issue_number }};
             const maxIterations = ${{ needs.initialize.outputs.max_iterations }};
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `## ⚠️ Maximum Iterations Reached
-              
+
               The Ralph loop has reached the maximum number of iterations (${maxIterations}).
-              
+
               **Next Steps:**
               - Review the learnings document: \`docs/ralph-tasks/issue-${issueNumber}-learnings.md\`
               - Determine if the completion requirement has been met
@@ -322,7 +323,7 @@ jobs:
                 - Increase the max iterations limit and re-run
                 - Adjust the completion requirements
                 - Continue manually
-              
+
               The learnings document will remain in the repository for reference.`
             });
 
@@ -345,32 +346,32 @@ jobs:
           script: |
             const issueNumber = ${{ needs.initialize.outputs.issue_number }};
             const completionRequirement = `${{ needs.initialize.outputs.completion_requirement }}`;
-            
+
             // Post comment asking for manual confirmation
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `## 🎯 Completion Check
-              
+
               **Completion Requirement:**
               > ${completionRequirement}
-              
+
               Please review the current state and confirm:
               - Has the completion requirement been met?
               - Should the Ralph loop continue?
-              
+
               **To mark as complete:**
               Reply with: \`@github-actions mark-complete\`
-              
+
               **To continue iterations:**
               The loop will automatically continue if max iterations not reached.
-              
+
               **Current artifacts:**
               - PRD: \`docs/ralph-tasks/issue-${issueNumber}-prd.md\`
               - Learnings: \`docs/ralph-tasks/issue-${issueNumber}-learnings.md\``
             });
-            
+
             core.setOutput('requires_manual_check', 'true');
 
   handle-completion:
@@ -395,7 +396,7 @@ jobs:
         run: |
           ISSUE_NUM="${{ steps.extract.outputs.issue_number }}"
           LEARNINGS_PATH="docs/ralph-tasks/issue-${ISSUE_NUM}-learnings.md"
-          
+
           if [ -f "$LEARNINGS_PATH" ]; then
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
@@ -412,25 +413,25 @@ jobs:
         with:
           script: |
             const issueNumber = ${{ steps.extract.outputs.issue_number }};
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: `## ✅ Ralph Loop Complete!
-              
+
               The Ralph loop has been marked as complete.
-              
+
               **Actions taken:**
               - ✅ Learnings document removed from repository
               - 📄 PRD remains at: \`docs/ralph-tasks/issue-${issueNumber}-prd.md\`
-              
+
               **Summary:**
               The completion requirement has been met. The learnings document has been removed as it was temporary working documentation. The PRD remains for historical reference.
-              
+
               You may now close this issue if all work is complete.`
             });
-            
+
             // Optionally add a label
             await github.rest.issues.addLabels({
               owner: context.repo.owner,

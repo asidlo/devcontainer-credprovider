@@ -6,10 +6,10 @@ body:
     attributes:
       value: |
         ## Ralph Task
-        
+
         This template creates a task that will be processed through a Ralph loop - an iterative learning process
         that maintains a learnings document across iterations until completion requirements are met.
-        
+
   - type: textarea
     id: description
     attributes:
@@ -19,7 +19,7 @@ body:
         Describe the task, feature, or improvement you'd like to implement.
     validations:
       required: true
-      
+
   - type: textarea
     id: requirements
     attributes:
@@ -31,7 +31,7 @@ body:
         - Requirement 3
     validations:
       required: true
-      
+
   - type: textarea
     id: completion_requirement
     attributes:
@@ -41,7 +41,7 @@ body:
         Example: "All tests pass with 90% code coverage" or "Feature is implemented and documented"
     validations:
       required: false
-      
+
   - type: input
     id: max_iterations
     attributes:
@@ -50,7 +50,7 @@ body:
       placeholder: "10"
     validations:
       required: false
-      
+
   - type: textarea
     id: context
     attributes:
