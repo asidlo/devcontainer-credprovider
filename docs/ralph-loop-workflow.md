@@ -23,6 +23,28 @@ Use the "Ralph Task" issue template when creating a new issue. Fill in:
 - **Maximum Iterations**: How many iterations to run (defaults to 10)
 - **Additional Context**: Any extra information
 
+**Example Issue:**
+
+```yaml
+Task Description:
+Add support for AWS CodeArtifact credential provider
+
+Requirements:
+- Implement AWS CodeArtifact authentication
+- Support both CLI and SDK authentication methods
+- Add unit tests for new authentication flow
+- Document configuration in README
+
+Completion Requirement:
+All tests pass with >80% coverage, AWS CodeArtifact integration works in devcontainer environment, and documentation is complete
+
+Maximum Iterations:
+15
+
+Additional Context:
+Should integrate seamlessly with existing credential provider architecture
+```
+
 ### 2. The Workflow Initializes
 
 Once the issue is created with the `ralph-task` label:
@@ -130,6 +152,15 @@ The workflow can be triggered by:
 4. **Progress Tracking**: Learnings document shows the journey
 5. **Clean Completion**: Removes temporary docs when done
 
+## Workflow Architecture
+
+The Ralph Loop workflow consists of several jobs:
+
+1. **Initialize**: Parses issue, generates PRD and learnings document
+2. **Execute Loop**: Runs iterations (this is where actual work happens)
+3. **Check Completion**: Evaluates completion requirements
+4. **Handle Completion**: Cleans up learnings document when done
+
 ## Troubleshooting
 
 ### Workflow doesn't start
@@ -170,3 +201,18 @@ You can have multiple Ralph tasks running simultaneously. Each gets its own PRD 
 3. **Review Learnings**: Check the learnings document regularly to track progress
 4. **Update Requirements**: If requirements change, update the issue and PRD
 5. **Clean Completion**: Always mark tasks complete to clean up learnings docs
+
+## Alternative Implementations
+
+While this implementation provides a structured workflow for iterative development, you might consider these alternatives:
+
+### Option 1: Project Boards + Automation
+Instead of a custom workflow, use GitHub Projects with automation rules to track iterations and progress.
+
+### Option 2: GitHub Actions + External AI
+Integrate with AI tools (like GPT-4 or Claude) to automatically generate PRDs and update learnings based on commit history.
+
+### Option 3: Simplified Manual Process
+Use issue templates and manual documentation without automated workflow for smaller projects.
+
+The current implementation balances automation with control, allowing teams to maintain context across iterations while keeping the process lightweight.
