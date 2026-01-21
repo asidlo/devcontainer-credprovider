@@ -1,0 +1,62 @@
+name: Ralph Task
+description: Create a new Ralph task with iterative learning loop
+labels: [ralph-task]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Ralph Task
+        
+        This template creates a task that will be processed through a Ralph loop - an iterative learning process
+        that maintains a learnings document across iterations until completion requirements are met.
+        
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: Describe what you want to accomplish
+      placeholder: |
+        Describe the task, feature, or improvement you'd like to implement.
+    validations:
+      required: true
+      
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: List the specific requirements for this task
+      placeholder: |
+        - Requirement 1
+        - Requirement 2
+        - Requirement 3
+    validations:
+      required: true
+      
+  - type: textarea
+    id: completion_requirement
+    attributes:
+      label: Completion Requirement
+      description: Define the specific criteria that must be met to consider this task complete
+      placeholder: |
+        Example: "All tests pass with 90% code coverage" or "Feature is implemented and documented"
+    validations:
+      required: false
+      
+  - type: input
+    id: max_iterations
+    attributes:
+      label: Maximum Iterations
+      description: Maximum number of iterations to run (defaults to 10 if not specified)
+      placeholder: "10"
+    validations:
+      required: false
+      
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional context, constraints, or considerations
+      placeholder: |
+        Add any additional information that might be helpful for completing this task.
+    validations:
+      required: false

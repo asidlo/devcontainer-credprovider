@@ -184,6 +184,15 @@ MIT - See [LICENSE](LICENSE)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Ralph Loop Workflow
+
+This repository supports iterative task development through the Ralph Loop workflow. Create an issue with the `ralph-task` label to automatically:
+- Generate a Product Requirements Document (PRD)
+- Maintain learnings across iterations
+- Track progress until completion
+
+See [docs/ralph-loop-workflow.md](docs/ralph-loop-workflow.md) for details.
+
 ## Security
 
 Please report security issues privately. See [SECURITY.md](SECURITY.md).
