@@ -90,6 +90,126 @@ else
     echo "⚠ Warning: curl not available, skipping artifacts-credprovider installation"
 fi
 
+# Install xdg-open for browser-based authentication flows
+# Microsoft's artifacts-credprovider uses xdg-open to launch the browser for device code flow
+echo ""
+echo "Installing xdg-open..."
+
+XDG_OPEN_SHIM_CONTENT='#!/bin/bash
+# Shim to redirect xdg-open calls to VS Code'"'"'s browser helper
+if [ -n "$BROWSER" ]; then
+    exec "$BROWSER" "$@"
+else
+    echo "No BROWSER set, cannot open: $1" >&2
+    exit 1
+fi'
+
+install_xdg_open_shim() {
+    echo "$XDG_OPEN_SHIM_CONTENT" > /usr/local/bin/xdg-open
+    chmod 755 /usr/local/bin/xdg-open
+    echo "✓ Installed xdg-open shim to /usr/local/bin/xdg-open"
+}
+
+# Check if already available
+if command -v xdg-open &>/dev/null; then
+    echo "✓ xdg-open already available at $(command -v xdg-open)"
+else
+    # Detect OS from /etc/os-release
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_ID="${ID:-unknown}"
+        OS_ID_LIKE="${ID_LIKE:-}"
+    else
+        OS_ID="unknown"
+        OS_ID_LIKE=""
+    fi
+
+    case "$OS_ID" in
+        debian|ubuntu|linuxmint|pop|elementary|zorin|kali|raspbian)
+            if apt-get update && apt-get install -y xdg-utils 2>/dev/null; then
+                echo "✓ Installed xdg-open via apt-get"
+            else
+                echo "⚠ apt-get install failed, installing shim..."
+                install_xdg_open_shim
+            fi
+            ;;
+        mariner|azurelinux|cbl-mariner)
+            # Azure Linux/Mariner - xdg-utils not available in repos
+            echo "⚠ xdg-utils not available on Azure Linux/Mariner, installing shim..."
+            install_xdg_open_shim
+            ;;
+        fedora|rhel|centos|rocky|alma|ol)
+            if dnf install -y xdg-utils 2>/dev/null; then
+                echo "✓ Installed xdg-open via dnf"
+            else
+                echo "⚠ dnf install failed, installing shim..."
+                install_xdg_open_shim
+            fi
+            ;;
+        alpine)
+            if apk add --no-cache xdg-utils 2>/dev/null; then
+                echo "✓ Installed xdg-open via apk"
+            else
+                echo "⚠ apk install failed, installing shim..."
+                install_xdg_open_shim
+            fi
+            ;;
+        arch|manjaro|endeavouros)
+            if pacman -S --noconfirm xdg-utils 2>/dev/null; then
+                echo "✓ Installed xdg-open via pacman"
+            else
+                echo "⚠ pacman install failed, installing shim..."
+                install_xdg_open_shim
+            fi
+            ;;
+        opensuse*|sles)
+            if zypper install -y xdg-utils 2>/dev/null; then
+                echo "✓ Installed xdg-open via zypper"
+            else
+                echo "⚠ zypper install failed, installing shim..."
+                install_xdg_open_shim
+            fi
+            ;;
+        *)
+            # Check ID_LIKE for derivative distros
+            case "$OS_ID_LIKE" in
+                *debian*|*ubuntu*)
+                    if apt-get update && apt-get install -y xdg-utils 2>/dev/null; then
+                        echo "✓ Installed xdg-open via apt-get"
+                    else
+                        install_xdg_open_shim
+                    fi
+                    ;;
+                *fedora*|*rhel*)
+                    if dnf install -y xdg-utils 2>/dev/null || yum install -y xdg-utils 2>/dev/null; then
+                        echo "✓ Installed xdg-open via dnf/yum"
+                    else
+                        install_xdg_open_shim
+                    fi
+                    ;;
+                *suse*)
+                    if zypper install -y xdg-utils 2>/dev/null; then
+                        echo "✓ Installed xdg-open via zypper"
+                    else
+                        install_xdg_open_shim
+                    fi
+                    ;;
+                *arch*)
+                    if pacman -S --noconfirm xdg-utils 2>/dev/null; then
+                        echo "✓ Installed xdg-open via pacman"
+                    else
+                        install_xdg_open_shim
+                    fi
+                    ;;
+                *)
+                    echo "⚠ Unknown OS ($OS_ID), installing xdg-open shim..."
+                    install_xdg_open_shim
+                    ;;
+            esac
+            ;;
+    esac
+fi
+
 # Configure environment for terminal shells
 # Note: C# DevKit gets NUGET_PLUGIN_PATHS from containerEnv in devcontainer-feature.json
 echo ""

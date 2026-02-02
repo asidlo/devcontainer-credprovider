@@ -343,7 +343,7 @@ jobs:
       - name: Create Draft GitHub Release
         id: create-release
         if: steps.check-release.outputs.exists != 'true' || steps.check-release.outputs.can_update == 'true'
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
