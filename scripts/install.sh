@@ -14,6 +14,7 @@
 #   RUN_TESTS                   - Run verification tests after install (default: false)
 #   PLUGIN_INSTALL_DIR          - Override installation directory (default: /usr/local/share/nuget/plugins/custom)
 #   SKIP_ARTIFACTS_CREDPROVIDER - Skip installing Microsoft's artifacts-credprovider (default: false)
+#   SKIP_XDG_OPEN               - Skip installing xdg-open (default: false)
 #   SKIP_ENV_CONFIG             - Skip configuring NUGET_PLUGIN_PATHS (default: false)
 #   GITHUB_REPO                 - GitHub repo for downloads (default: asidlo/devcontainer-credprovider)
 
@@ -224,10 +225,135 @@ else
   echo "3. Skipping Microsoft artifacts-credprovider (SKIP_ARTIFACTS_CREDPROVIDER=true)"
 fi
 
+# Install xdg-open for browser-based authentication flows
+# Microsoft's artifacts-credprovider uses xdg-open to launch the browser for device code flow
+if [ "${SKIP_XDG_OPEN:-false}" != "true" ]; then
+  echo ""
+  echo "4. Installing xdg-open..."
+
+  XDG_OPEN_SHIM_CONTENT='#!/bin/bash
+# Shim to redirect xdg-open calls to VS Code'"'"'s browser helper
+if [ -n "$BROWSER" ]; then
+    exec "$BROWSER" "$@"
+else
+    echo "No BROWSER set, cannot open: $1" >&2
+    exit 1
+fi'
+
+  install_xdg_open_shim() {
+      echo "$XDG_OPEN_SHIM_CONTENT" > /usr/local/bin/xdg-open
+      chmod 755 /usr/local/bin/xdg-open
+      echo "   ✓ Installed xdg-open shim to /usr/local/bin/xdg-open"
+  }
+
+  # Check if already available
+  if command -v xdg-open &>/dev/null; then
+      echo "   ✓ xdg-open already available at $(command -v xdg-open)"
+  else
+      # Detect OS from /etc/os-release
+      if [ -f /etc/os-release ]; then
+          . /etc/os-release
+          OS_ID="${ID:-unknown}"
+          OS_ID_LIKE="${ID_LIKE:-}"
+      else
+          OS_ID="unknown"
+          OS_ID_LIKE=""
+      fi
+
+      case "$OS_ID" in
+          debian|ubuntu|linuxmint|pop|elementary|zorin|kali|raspbian)
+              if apt-get update -qq && apt-get install -y -qq xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via apt-get"
+              else
+                  echo "   ⚠ apt-get install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          mariner|azurelinux|cbl-mariner)
+              # Azure Linux/Mariner - xdg-utils not available in repos
+              echo "   ⚠ xdg-utils not available on Azure Linux/Mariner, installing shim..."
+              install_xdg_open_shim
+              ;;
+          fedora|rhel|centos|rocky|alma|ol)
+              if dnf install -y -q xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via dnf"
+              else
+                  echo "   ⚠ dnf install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          alpine)
+              if apk add --no-cache -q xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via apk"
+              else
+                  echo "   ⚠ apk install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          arch|manjaro|endeavouros)
+              if pacman -S --noconfirm xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via pacman"
+              else
+                  echo "   ⚠ pacman install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          opensuse*|sles)
+              if zypper install -y -q xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via zypper"
+              else
+                  echo "   ⚠ zypper install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          *)
+              # Check ID_LIKE for derivative distros
+              case "$OS_ID_LIKE" in
+                  *debian*|*ubuntu*)
+                      if apt-get update -qq && apt-get install -y -qq xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via apt-get"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *fedora*|*rhel*)
+                      if dnf install -y -q xdg-utils 2>/dev/null || yum install -y -q xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via dnf/yum"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *suse*)
+                      if zypper install -y -q xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via zypper"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *arch*)
+                      if pacman -S --noconfirm xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via pacman"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *)
+                      echo "   ⚠ Unknown OS ($OS_ID), installing xdg-open shim..."
+                      install_xdg_open_shim
+                      ;;
+              esac
+              ;;
+      esac
+  fi
+else
+  echo ""
+  echo "4. Skipping xdg-open installation (SKIP_XDG_OPEN=true)"
+fi
+
 # Configure NUGET_PLUGIN_PATHS (note: plural with 'S' is required by NuGet)
 if [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
   echo ""
-  echo "4. Configuring environment..."
+  echo "5. Configuring environment..."
   
   # Build plugin paths - must point to the actual plugin DLL, semicolon-separated (even on Linux)
   DEVCONTAINER_PLUGIN_DLL="$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll"
@@ -285,13 +411,13 @@ ENVSCRIPT
   fi
 else
   echo ""
-  echo "4. Skipping environment config (SKIP_ENV_CONFIG=true)"
+  echo "5. Skipping environment config (SKIP_ENV_CONFIG=true)"
 fi
 
 # Run tests if requested
 if [ "$RUN_TESTS" = "true" ]; then
   echo ""
-  echo "5. Running verification tests..."
+  echo "6. Running verification tests..."
   
   # Test that plugin exists
   if [ -f "$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll" ]; then
