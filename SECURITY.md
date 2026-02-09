@@ -47,8 +47,7 @@ Releases are signed with Sigstore. To verify:
 ```bash
 # Install cosign: https://docs.sigstore.dev/system_config/installation/
 cosign verify-blob \
-  --signature devcontainer-credprovider.tar.gz.sig \
-  --certificate devcontainer-credprovider.tar.gz.cert \
+  --bundle devcontainer-credprovider.tar.gz.bundle \
   --certificate-identity-regexp "https://github.com/asidlo/devcontainer-credprovider/.*" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   devcontainer-credprovider.tar.gz

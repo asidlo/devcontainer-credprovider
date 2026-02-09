@@ -60,7 +60,7 @@ dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer.dll
 Each GitHub release includes:
 
 - `checksums.sha256` (SHA-256 of the `.tar.gz` and `.zip`)
-- Sigstore (cosign) signatures: `*.sig` and certificates: `*.cert`
+- Sigstore (cosign) bundles: `*.bundle`
 
 Verify checksums:
 
@@ -72,8 +72,9 @@ Verify Sigstore signatures (requires `cosign`):
 
 ```bash
 cosign verify-blob \
-  --signature devcontainer-credprovider.tar.gz.sig \
-  --certificate devcontainer-credprovider.tar.gz.cert \
+  --bundle devcontainer-credprovider.tar.gz.bundle \
+  --certificate-identity-regexp "https://github.com/asidlo/devcontainer-credprovider/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   devcontainer-credprovider.tar.gz
 ```
 
