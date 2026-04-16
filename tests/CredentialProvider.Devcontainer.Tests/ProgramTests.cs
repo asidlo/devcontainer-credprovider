@@ -13,7 +13,7 @@ public class ProgramTests
     public void GetVersion_ReturnsVersionString()
     {
         var version = Program.GetVersion();
-        
+
         Assert.NotNull(version);
         Assert.NotEmpty(version);
     }
@@ -82,7 +82,7 @@ public class ProgramTests
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        
+
         var token = await Program.TryGetAccessTokenAsync("https://pkgs.dev.azure.com/test/", cts.Token);
         Assert.Null(token);
     }
@@ -115,8 +115,29 @@ public class ProgramTests
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        
+
         var token = await Program.TryGetTokenFromAuthHelperAsync(cts.Token);
+        Assert.Null(token);
+    }
+
+    #endregion
+
+    #region TryGetTokenFromAzureIdentityAsync
+
+    [Fact]
+    public async Task TryGetTokenFromAzureIdentityAsync_Completes()
+    {
+        var token = await Program.TryGetTokenFromAzureIdentityAsync();
+        Assert.True(token == null || token.Length > 0);
+    }
+
+    [Fact]
+    public async Task TryGetTokenFromAzureIdentityAsync_CancelledToken_ReturnsNull()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var token = await Program.TryGetTokenFromAzureIdentityAsync(cts.Token);
         Assert.Null(token);
     }
 
@@ -155,7 +176,7 @@ public class ProgramTests
         });
 
         Assert.NotNull(process);
-        
+
         // Let it start, then kill it
         await Task.Delay(300);
         process.Kill();
@@ -196,7 +217,7 @@ public class ProgramTests
     public void PluginConfig_ConfigFilePath_ReturnsExpectedPath()
     {
         var path = PluginConfig.ConfigFilePath;
-        
+
         Assert.NotEmpty(path);
         Assert.Contains(".config", path);
         Assert.Contains("devcontainer-credprovider", path);
@@ -207,7 +228,7 @@ public class ProgramTests
     public void PluginConfig_Instance_ReturnsConfig()
     {
         var config = PluginConfig.Instance;
-        
+
         Assert.NotNull(config);
         Assert.NotNull(config.Verbosity);
     }
@@ -220,7 +241,7 @@ public class ProgramTests
         {
             Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED", "true");
             PluginConfig.Reload();
-            
+
             Assert.True(PluginConfig.Instance.Disabled);
         }
         finally
@@ -238,7 +259,7 @@ public class ProgramTests
         {
             Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "debug");
             PluginConfig.Reload();
-            
+
             Assert.Equal("debug", PluginConfig.Instance.Verbosity);
             Assert.True(PluginConfig.Instance.IsVerbose);
         }
@@ -257,7 +278,7 @@ public class ProgramTests
         {
             Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "debug");
             PluginConfig.Reload();
-            
+
             Assert.True(PluginConfig.Instance.IsVerbose);
         }
         finally
@@ -275,7 +296,7 @@ public class ProgramTests
         {
             Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "verbose");
             PluginConfig.Reload();
-            
+
             Assert.True(PluginConfig.Instance.IsVerbose);
         }
         finally
@@ -293,12 +314,66 @@ public class ProgramTests
         {
             Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", "normal");
             PluginConfig.Reload();
-            
+
             Assert.False(PluginConfig.Instance.IsVerbose);
         }
         finally
         {
             Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_UseAzureIdentity_DefaultsToTrue()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", null);
+            PluginConfig.Reload();
+
+            Assert.True(PluginConfig.Instance.UseAzureIdentity);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_UseAzureIdentityEnvVar_DisablesWhenFalse()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", "false");
+            PluginConfig.Reload();
+
+            Assert.False(PluginConfig.Instance.UseAzureIdentity);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
+
+    [Fact]
+    public void PluginConfig_UseAzureIdentityEnvVar_DisablesWhenZero()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", "0");
+            PluginConfig.Reload();
+
+            Assert.False(PluginConfig.Instance.UseAzureIdentity);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", originalValue);
             PluginConfig.Reload();
         }
     }

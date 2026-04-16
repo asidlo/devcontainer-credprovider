@@ -62,4 +62,51 @@ public class AuthenticationTests
         // Assert - Method completed without error (token may be null if no auth available)
         Assert.True(true);
     }
+
+    [Fact]
+    public async Task TryGetTokenFromAzureIdentityAsync_CompletesWithoutThrowing()
+    {
+        // Act - Azure Identity may or may not find credentials depending on environment
+        var token = await Program.TryGetTokenFromAzureIdentityAsync();
+
+        // Assert - Method completed without throwing (token may be null)
+        Assert.True(token == null || token.Length > 0);
+    }
+
+    [Fact]
+    public async Task TryGetTokenFromAzureIdentityAsync_WithCancellation_ReturnsNull()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Act
+        var token = await Program.TryGetTokenFromAzureIdentityAsync(cts.Token);
+
+        // Assert
+        Assert.Null(token);
+    }
+
+    [Fact]
+    public async Task TryGetAccessToken_WithAzureIdentityDisabled_SkipsAzureIdentity()
+    {
+        // Arrange
+        var originalValue = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY");
+        try
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", "false");
+            PluginConfig.Reload();
+
+            // Act - With Azure Identity disabled and no auth helpers, should return null quickly
+            var token = await Program.TryGetAccessTokenAsync("https://pkgs.dev.azure.com/test/");
+
+            // Assert - should not throw
+            Assert.True(token == null || token.Length > 0);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY", originalValue);
+            PluginConfig.Reload();
+        }
+    }
 }

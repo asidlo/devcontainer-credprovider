@@ -2,17 +2,21 @@
 # Install the Devcontainer credential provider to the NuGet plugins folder
 #
 # Usage:
-#   ./install.sh                              # Build locally and install
+#   ./install.sh                              # System-wide install (requires root, needs NUGET_PLUGIN_PATHS)
+#   ./install.sh --user                       # User install to ~/.nuget/plugins/ (auto-discovered by NuGet)
 #   SOURCE=release ./install.sh               # Download from latest GitHub release
 #   SOURCE=pr PR_NUMBER=123 ./install.sh      # Download from PR build artifact
 #   RUN_TESTS=true ./install.sh               # Build, install, and run tests
+#
+# Flags:
+#   --user                      - Install to ~/.nuget/plugins/netcore/ (NuGet auto-discovers, no env vars needed)
 #
 # Environment variables:
 #   SOURCE                      - Where to get binaries: "local" (default), "release", or "pr"
 #   PR_NUMBER                   - PR number when SOURCE=pr
 #   RELEASE_VERSION             - Release tag when SOURCE=release (default: latest)
 #   RUN_TESTS                   - Run verification tests after install (default: false)
-#   PLUGIN_INSTALL_DIR          - Override installation directory (default: /usr/local/share/nuget/plugins/custom)
+#   PLUGIN_INSTALL_DIR          - Override installation directory (default depends on --user flag)
 #   SKIP_ARTIFACTS_CREDPROVIDER - Skip installing Microsoft's artifacts-credprovider (default: false)
 #   SKIP_XDG_OPEN               - Skip installing xdg-open (default: false)
 #   SKIP_ENV_CONFIG             - Skip configuring NUGET_PLUGIN_PATHS (default: false)
@@ -20,15 +24,34 @@
 
 set -e
 
+# Parse command-line flags
+USER_INSTALL=false
+for arg in "$@"; do
+  case "$arg" in
+    --user)
+      USER_INSTALL=true
+      ;;
+  esac
+done
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)" || REPO_ROOT="$SCRIPT_DIR"
 SOURCE="${SOURCE:-local}"
 RUN_TESTS="${RUN_TESTS:-false}"
 GITHUB_REPO="${GITHUB_REPO:-asidlo/devcontainer-credprovider}"
-PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-/usr/local/share/nuget/plugins/custom}"
+
+# Set install paths based on --user flag
+if [ "$USER_INSTALL" = "true" ]; then
+  # User install: NuGet auto-discovers plugins at ~/.nuget/plugins/netcore/<PluginName>/
+  PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-$HOME/.nuget/plugins/netcore}"
+  AZURE_PLUGIN_DIR="$HOME/.nuget/plugins/netcore"
+else
+  # System install: requires NUGET_PLUGIN_PATHS env var
+  PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-/usr/local/share/nuget/plugins/custom}"
+  AZURE_PLUGIN_DIR="/usr/local/share/nuget/plugins/azure"
+fi
 PLUGIN_INSTALL_DIR="$PLUGIN_BASE_DIR/CredentialProvider.Devcontainer"
-AZURE_PLUGIN_DIR="/usr/local/share/nuget/plugins/azure"
 
 # Temporary directory for downloads/builds
 WORK_DIR=$(mktemp -d)
@@ -37,6 +60,11 @@ trap "rm -rf $WORK_DIR" EXIT
 echo "=== Devcontainer Credential Provider - Install ==="
 echo ""
 echo "Source: $SOURCE"
+if [ "$USER_INSTALL" = "true" ]; then
+  echo "Mode: User install (NuGet auto-discovers, no env vars needed)"
+else
+  echo "Mode: System install (requires NUGET_PLUGIN_PATHS)"
+fi
 echo "Install directory: $PLUGIN_INSTALL_DIR"
 echo ""
 
@@ -351,7 +379,11 @@ else
 fi
 
 # Configure NUGET_PLUGIN_PATHS (note: plural with 'S' is required by NuGet)
-if [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
+# User installs skip this - NuGet auto-discovers plugins at ~/.nuget/plugins/netcore/
+if [ "$USER_INSTALL" = "true" ]; then
+  echo ""
+  echo "5. Skipping environment config (user install - NuGet auto-discovers ~/.nuget/plugins/netcore/)"
+elif [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
   echo ""
   echo "5. Configuring environment..."
   
@@ -451,8 +483,20 @@ fi
 echo ""
 echo "=== Installation Complete ==="
 echo ""
-echo "Plugin locations:"
-echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
-echo "  Azure (device code flow): $AZURE_PLUGIN_DIR"
+if [ "$USER_INSTALL" = "true" ]; then
+  echo "Install mode: User (NuGet auto-discovers - no env vars needed)"
+  echo ""
+  echo "Plugin locations:"
+  echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
+  if [ "${SKIP_ARTIFACTS_CREDPROVIDER:-false}" != "true" ] && [ -d "$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft" ]; then
+    echo "  Azure (device code flow): $AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+  fi
+else
+  echo "Install mode: System (uses NUGET_PLUGIN_PATHS)"
+  echo ""
+  echo "Plugin locations:"
+  echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
+  echo "  Azure (device code flow): $AZURE_PLUGIN_DIR"
+fi
 echo ""
 echo "To verify: dotnet $PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll --version"
