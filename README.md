@@ -13,24 +13,38 @@ Microsoft's official [artifacts-credprovider](https://github.com/microsoft/artif
 This credential provider authenticates silently using:
 
 1. **Auth helpers** (`~/ado-auth-helper`) - from devcontainer features
-2. **Fallback to artifacts-credprovider** - for device code flow when auth helpers are unavailable
+2. **Azure Identity** (`DefaultAzureCredential`) - supports az cli, managed identity, environment variables, browser login
+3. **Fallback to artifacts-credprovider** - for device code flow when all above are unavailable
 
 ## Prerequisites
 
-- **.NET 8 runtime** - Download from https://dotnet.microsoft.com/download/dotnet/8.0
-- **GitHub CLI** (for private repo downloads) - https://cli.github.com/
+- **.NET 8 runtime** - Download from <https://dotnet.microsoft.com/download/dotnet/8.0>
+- **GitHub CLI** (for private repo downloads) - <https://cli.github.com/>
 
 ## Quick Install
 
-Download and install from GitHub releases using the GitHub CLI:
+### User Install (Recommended for WSL / local development)
 
-**Linux/macOS:**
+Installs to `~/.nuget/plugins/netcore/` which NuGet auto-discovers — no environment variables needed.
+Works with `dotnet restore`, VS Code C# Dev Kit, Visual Studio, and Rider.
 
 ```bash
 gh release download -R asidlo/devcontainer-credprovider -p "*.tar.gz" \
   && mkdir -p /tmp/cred-provider \
   && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
-  && /tmp/cred-provider/install.sh \
+  && /tmp/cred-provider/install.sh --user \
+  && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
+```
+
+### System Install (for devcontainers / CI)
+
+Installs to `/usr/local/share/nuget/plugins/` and configures `NUGET_PLUGIN_PATHS`.
+
+```bash
+gh release download -R asidlo/devcontainer-credprovider -p "*.tar.gz" \
+  && mkdir -p /tmp/cred-provider \
+  && tar xzf devcontainer-credprovider.tar.gz -C /tmp/cred-provider \
+  && sudo /tmp/cred-provider/install.sh \
   && rm -rf /tmp/cred-provider devcontainer-credprovider.tar.gz
 ```
 
@@ -48,11 +62,14 @@ After installation, just run `dotnet restore` - no environment variables needed!
 ### Verify Installation
 
 ```bash
-# Check version
-dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer.dll --version
+# User install
+dotnet ~/.nuget/plugins/netcore/CredentialProvider.Devcontainer/CredentialProvider.Devcontainer.dll --version
+
+# System install
+dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer/CredentialProvider.Devcontainer.dll --version
 
 # Test credential acquisition
-dotnet /usr/local/share/nuget/plugins/custom/CredentialProvider.Devcontainer.dll --test
+dotnet ~/.nuget/plugins/netcore/CredentialProvider.Devcontainer/CredentialProvider.Devcontainer.dll --test
 ```
 
 ## Release Verification
@@ -99,7 +116,10 @@ This is a **NuGet credential provider plugin** that NuGet automatically calls wh
 When NuGet requests credentials for an Azure Artifacts feed:
 
 1. **Try auth helpers** - Runs `~/ado-auth-helper get-access-token`
-2. **Fall back to artifacts-credprovider** - If auth helpers are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
+2. **Try Azure Identity** - Uses `DefaultAzureCredential` (az cli, managed identity, environment variables, browser login)
+3. **Fall back to artifacts-credprovider** - If all above are unavailable, returns `NotApplicable` to let NuGet try the next provider (Microsoft's artifacts-credprovider with device code flow)
+
+Azure Identity can be disabled via `DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY=false`.
 
 ## Devcontainer Feature (Recommended)
 
@@ -114,6 +134,7 @@ The easiest way to use this in devcontainers is with the published devcontainer 
 ```
 
 The feature automatically:
+
 - Installs the devcontainer credential provider to `/usr/local/share/nuget/plugins/custom/`
 - Installs Microsoft's artifacts-credprovider to `/usr/local/share/nuget/plugins/azure/`
 - Sets `NUGET_PLUGIN_PATHS` so both CLI and C# DevKit can find the providers
@@ -123,7 +144,10 @@ The feature automatically:
 ### Check if provider is installed
 
 ```bash
-# Check devcontainer provider
+# Check user install
+ls -la ~/.nuget/plugins/netcore/CredentialProvider.Devcontainer/
+
+# Check system install (devcontainer/CI)
 ls -la /usr/local/share/nuget/plugins/custom/
 
 # Check artifacts-credprovider fallback
@@ -132,9 +156,10 @@ ls -la /usr/local/share/nuget/plugins/azure/
 
 ### C# DevKit Integration
 
-The feature automatically sets `NUGET_PLUGIN_PATHS` so C# DevKit will use the credential providers. No additional configuration needed.
+User installs (`--user`) are auto-discovered by C# DevKit — no configuration needed.
 
-If you're not using the devcontainer feature and need to configure manually:
+For system installs, the install script automatically sets `NUGET_PLUGIN_PATHS`.
+If you need to configure manually:
 
 ```json
 {
@@ -166,13 +191,12 @@ az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --qu
 ### Uninstall
 
 ```bash
-# Remove devcontainer provider
+# Remove user install
+rm -rf ~/.nuget/plugins/netcore/CredentialProvider.Devcontainer
+
+# Remove system install
 rm -rf /usr/local/share/nuget/plugins/custom
-
-# Remove artifacts-credprovider fallback
 rm -rf /usr/local/share/nuget/plugins/azure
-
-# Remove environment configuration
 rm -f /etc/profile.d/nuget-credprovider.sh
 ```
 
