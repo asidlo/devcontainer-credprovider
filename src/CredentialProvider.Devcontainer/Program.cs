@@ -207,7 +207,7 @@ public static class Program
             Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY=true|false    Enable/disable Azure Identity fallback (default: true)");
             Console.WriteLine();
             Console.WriteLine($"  Config file: {PluginConfig.ConfigFilePath}");
-            Console.WriteLine("     Example: { \"disabled\": true, \"verbosity\": \"debug\" }");
+            Console.WriteLine("     Example: { \"disabled\": true, \"verbosity\": \"debug\", \"useAzureIdentity\": false }");
             Console.WriteLine();
             return 0;
         }
