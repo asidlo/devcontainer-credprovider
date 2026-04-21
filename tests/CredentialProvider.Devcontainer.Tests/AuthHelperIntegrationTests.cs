@@ -453,8 +453,9 @@ public class AuthHelperIntegrationTests : IDisposable
         process.Kill();
         await process.WaitForExitAsync();
 
-        // Process started plugin mode without crashing on startup
-        Assert.True(true);
+        // Verify the process reached the plugin startup path (not the "no args" error)
+        var stderr = await process.StandardError.ReadToEndAsync();
+        Assert.DoesNotContain("Use -Plugin to run as NuGet credential provider", stderr);
     }
 
     #endregion

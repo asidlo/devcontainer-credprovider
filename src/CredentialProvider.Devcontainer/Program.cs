@@ -444,7 +444,7 @@ public static class Program
                     }
                     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                     {
-                        // Timeout - kill the process and retry
+                        // Timeout (not caller cancellation) - kill the process and retry
                         Log($"Auth helper timed out: {helperPath}");
                         try { process.Kill(entireProcessTree: true); } catch { }
 
@@ -474,21 +474,27 @@ public static class Program
                     if (attempt < maxRetries)
                     {
                         Log($"Retrying in {retryDelayMs}ms...");
-                        try
-                        {
-                            await Task.Delay(retryDelayMs, cancellationToken);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            Log("Auth helper retry cancelled");
+                        await RetryDelayAsync(retryDelayMs, cancellationToken);
+                        if (cancellationToken.IsCancellationRequested)
                             return null;
-                        }
                     }
                 }
             }
         }
 
         return null;
+    }
+
+    private static async Task RetryDelayAsync(int delayMs, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delayMs, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            Log("Auth helper retry cancelled");
+        }
     }
 
     internal static bool IsAzureDevOpsUri(string? uri)
