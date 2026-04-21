@@ -156,7 +156,7 @@ public static class Program
         return 1;
     }
 
-    private static async Task<int> RunAsPluginAsync()
+    internal static async Task<int> RunAsPluginAsync()
     {
         Log("Plugin starting...");
 
@@ -234,7 +234,7 @@ public static class Program
     /// Runs the plugin in disabled mode - responds to protocol but returns NotApplicable for all credential requests.
     /// This allows testing fallback to other credential providers.
     /// </summary>
-    private static async Task<int> RunAsDisabledPluginAsync()
+    internal static async Task<int> RunAsDisabledPluginAsync()
     {
         // Always log disabled mode since user explicitly requested it
         Log("Running in DISABLED mode - all requests will return NotApplicable", alwaysLog: true);
@@ -392,6 +392,12 @@ public static class Program
 
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    Log("Auth helper token acquisition cancelled");
+                    return null;
+                }
+
                 try
                 {
                     Log($"Trying auth helper: {helperPath} (attempt {attempt}/{maxRetries})");
@@ -448,6 +454,18 @@ public static class Program
                             await Task.Delay(retryDelayMs, cancellationToken);
                         }
                     }
+                    catch (OperationCanceledException)
+                    {
+                        // Caller-requested cancellation - stop immediately
+                        Log("Auth helper token acquisition cancelled");
+                        try { process.Kill(entireProcessTree: true); } catch { }
+                        return null;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    Log("Auth helper token acquisition cancelled");
+                    return null;
                 }
                 catch (Exception ex)
                 {
@@ -456,7 +474,15 @@ public static class Program
                     if (attempt < maxRetries)
                     {
                         Log($"Retrying in {retryDelayMs}ms...");
-                        await Task.Delay(retryDelayMs, cancellationToken);
+                        try
+                        {
+                            await Task.Delay(retryDelayMs, cancellationToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Log("Auth helper retry cancelled");
+                            return null;
+                        }
                     }
                 }
             }
