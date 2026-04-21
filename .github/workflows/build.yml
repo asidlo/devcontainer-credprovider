@@ -26,12 +26,12 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Full history needed for MinVer to find tags
           fetch-tags: true  # Explicitly fetch all tags
       - name: Setup .NET
-        uses: actions/setup-dotnet@baa11fbfe1d6520db94683bd5c7a3818018e4309 # v5.1.0
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           dotnet-version: 8.x
       
@@ -114,14 +114,14 @@ jobs:
       
       - name: Upload coverage report
         if: steps.generate-coverage.outputs.report-generated == 'true'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           path: ./coverage/report
       
       - name: Add coverage PR comment
         if: github.event_name == 'pull_request' && steps.generate-coverage.outputs.report-generated == 'true'
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -198,12 +198,12 @@ jobs:
           cd ./publish
           zip -r devcontainer-credprovider.zip install.ps1 uninstall.ps1 netcore/
       - name: Upload tarball artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: devcontainer-credprovider-tarball
           path: ./publish/devcontainer-credprovider.tar.gz
       - name: Upload zip artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: devcontainer-credprovider-zip
           path: ./publish/devcontainer-credprovider.zip
@@ -266,13 +266,13 @@ jobs:
           echo "🏷️ Release version: $VERSION" >> $GITHUB_STEP_SUMMARY
 
       - name: Download tarball artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: devcontainer-credprovider-tarball
           path: ./artifacts
 
       - name: Download zip artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: devcontainer-credprovider-zip
           path: ./artifacts
@@ -291,7 +291,7 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
 
       - name: Sign release artifacts (keyless)
         run: |
@@ -299,8 +299,8 @@ jobs:
           for f in *.tar.gz *.zip; do
             echo "Signing $f"
             cosign sign-blob --yes \
-              --output-signature "${f}.sig" \
-              --output-certificate "${f}.cert" \
+              --bundle "${f}.bundle" \
+              --use-signing-config \
               "$f"
           done
           echo "✅ Signed artifacts with Sigstore (keyless)" >> $GITHUB_STEP_SUMMARY
@@ -343,7 +343,7 @@ jobs:
       - name: Create Draft GitHub Release
         id: create-release
         if: steps.check-release.outputs.exists != 'true' || steps.check-release.outputs.can_update == 'true'
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
@@ -437,7 +437,7 @@ jobs:
       
       - name: Publish Release
         if: steps.create-release.outputs.id != ''
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             await github.rest.repos.updateRelease({

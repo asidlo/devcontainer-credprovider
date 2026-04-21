@@ -2,19 +2,24 @@
 // Uses NuGet.Protocol library for proper plugin protocol handling
 // See: https://github.com/NuGet/Home/wiki/NuGet-cross-plat-authentication-plugin
 //
-// This plugin only uses auth helpers (ado-auth-helper, azure-auth-helper).
-// If auth helpers are not available or fail, it returns NotApplicable to allow
-// fallback to other credential providers like Microsoft's artifacts-credprovider.
+// Authentication chain (in order):
+//   1. Auth helpers (ado-auth-helper, azure-auth-helper) - for devcontainer/codespace environments
+//   2. Azure Identity (DefaultAzureCredential) - supports az cli, managed identity, env vars, browser login
+// If all methods fail, returns NotApplicable to allow fallback to other credential providers
+// like Microsoft's artifacts-credprovider.
 //
 // Configuration:
 //   Environment variables:
-//     DEVCONTAINER_CREDPROVIDER_DISABLED=true     - Disable plugin (for testing fallback)
-//     DEVCONTAINER_CREDPROVIDER_VERBOSITY=debug   - Enable verbose logging (to stderr)
+//     DEVCONTAINER_CREDPROVIDER_DISABLED=true              - Disable plugin (for testing fallback)
+//     DEVCONTAINER_CREDPROVIDER_VERBOSITY=debug            - Enable verbose logging (to stderr)
+//     DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY=false   - Disable Azure Identity fallback
 //   Config file (~/.config/devcontainer-credprovider/config.json):
-//     { "disabled": true, "verbosity": "debug" }
+//     { "disabled": true, "verbosity": "debug", "useAzureIdentity": false }
 
 using System.Diagnostics;
 using System.Reflection;
+using Azure.Core;
+using Azure.Identity;
 using NuGet.Protocol.Plugins;
 using CredentialProvider.Devcontainer.Handlers;
 
@@ -59,9 +64,9 @@ public static class Program
         Log($"Process started with args: [{string.Join(", ", args)}]");
         Log($"Process ID: {Environment.ProcessId}");
         Log($"Version: {GetVersion()}");
-        Log($"Config: Disabled={config.Disabled}, Verbosity={config.Verbosity}");
+        Log($"Config: Disabled={config.Disabled}, Verbosity={config.Verbosity}, UseAzureIdentity={config.UseAzureIdentity}");
         Log($"Config file path: {PluginConfig.ConfigFilePath}");
-        
+
         // Handle -Plugin argument (required for NuGet to recognize this as a credential provider)
         if (args.Contains("-Plugin", StringComparer.OrdinalIgnoreCase))
         {
@@ -96,11 +101,12 @@ public static class Program
             Console.WriteLine();
             Console.WriteLine("Configuration:");
             Console.WriteLine("  Environment variables:");
-            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_DISABLED=true|false         Disable plugin (for testing fallback)");
-            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_VERBOSITY=debug/verbose|*   Set logging verbosity");
+            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_DISABLED=true|false              Disable plugin (for testing fallback)");
+            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_VERBOSITY=debug/verbose|*        Set logging verbosity");
+            Console.WriteLine("    DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY=true|false    Enable/disable Azure Identity fallback (default: true)");
             Console.WriteLine();
             Console.WriteLine($"  Config file: {PluginConfig.ConfigFilePath}");
-            Console.WriteLine("     Example: { \"disabled\": true, \"verbosity\": \"debug\" }");
+            Console.WriteLine("     Example: { \"disabled\": true, \"verbosity\": \"debug\", \"useAzureIdentity\": false }");
             Console.WriteLine();
             return 0;
         }
@@ -115,10 +121,12 @@ public static class Program
             Console.WriteLine("Current settings:");
             Console.WriteLine($"  Disabled: {config.Disabled}");
             Console.WriteLine($"  Verbosity: {config.Verbosity}");
+            Console.WriteLine($"  UseAzureIdentity: {config.UseAzureIdentity}");
             Console.WriteLine();
             Console.WriteLine("Environment variables:");
             Console.WriteLine($"  DEVCONTAINER_CREDPROVIDER_DISABLED: {Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_DISABLED") ?? "(not set)"}");
             Console.WriteLine($"  DEVCONTAINER_CREDPROVIDER_VERBOSITY: {Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_VERBOSITY") ?? "(not set)"}");
+            Console.WriteLine($"  DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY: {Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY") ?? "(not set)"}");
             return 0;
         }
 
@@ -304,8 +312,69 @@ public static class Program
             return helperToken;
         }
 
-        Log("Auth helper not available, returning NotApplicable to allow fallback to other providers");
+        // Try Azure Identity (covers az cli, managed identity, env vars, browser login)
+        if (PluginConfig.Instance.UseAzureIdentity)
+        {
+            var identityToken = await TryGetTokenFromAzureIdentityAsync(cancellationToken);
+            if (!string.IsNullOrEmpty(identityToken))
+            {
+                Log("Acquired token via Azure Identity");
+                return identityToken;
+            }
+        }
+        else
+        {
+            Log("Azure Identity is disabled via configuration");
+        }
+
+        Log("No credential source available, returning NotApplicable to allow fallback to other providers");
         return null;
+    }
+
+    /// <summary>
+    /// Azure DevOps resource ID used for token requests.
+    /// </summary>
+    private const string AzureDevOpsResourceId = "499b84ac-1321-427f-aa17-267ca6975798";
+
+    internal static async Task<string?> TryGetTokenFromAzureIdentityAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Log("Attempting to acquire token via Azure Identity (DefaultAzureCredential)...");
+
+            var credential = new DefaultAzureCredential();
+            var tokenRequestContext = new TokenRequestContext([$"{AzureDevOpsResourceId}/.default"]);
+            var token = await credential.GetTokenAsync(tokenRequestContext, cancellationToken);
+
+            if (!string.IsNullOrEmpty(token.Token))
+            {
+                Log("Successfully acquired token via Azure Identity");
+                return token.Token;
+            }
+
+            Log("Azure Identity returned empty token");
+            return null;
+        }
+        catch (CredentialUnavailableException ex)
+        {
+            Log($"Azure Identity: No credential available - {ex.Message}");
+            return null;
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            Log($"Azure Identity: Authentication failed - {ex.Message}");
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            Log("Azure Identity: Token acquisition cancelled");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log($"Azure Identity: Unexpected error - {ex.Message}");
+            return null;
+        }
     }
 
     internal static async Task<string?> TryGetTokenFromAuthHelperAsync(CancellationToken cancellationToken = default)

@@ -2,22 +2,37 @@
 # Install the Devcontainer credential provider to the NuGet plugins folder
 #
 # Usage:
-#   ./install.sh                              # Build locally and install
+#   ./install.sh                              # System-wide install (requires root, needs NUGET_PLUGIN_PATHS)
+#   ./install.sh --user                       # User install to ~/.nuget/plugins/ (auto-discovered by NuGet)
 #   SOURCE=release ./install.sh               # Download from latest GitHub release
 #   SOURCE=pr PR_NUMBER=123 ./install.sh      # Download from PR build artifact
 #   RUN_TESTS=true ./install.sh               # Build, install, and run tests
+#
+# Flags:
+#   --user                      - Install to ~/.nuget/plugins/netcore/ (NuGet auto-discovers, no env vars needed)
 #
 # Environment variables:
 #   SOURCE                      - Where to get binaries: "local" (default), "release", or "pr"
 #   PR_NUMBER                   - PR number when SOURCE=pr
 #   RELEASE_VERSION             - Release tag when SOURCE=release (default: latest)
 #   RUN_TESTS                   - Run verification tests after install (default: false)
-#   PLUGIN_INSTALL_DIR          - Override installation directory (default: /usr/local/share/nuget/plugins/custom)
+#   PLUGIN_INSTALL_DIR          - Override installation directory (default depends on --user flag)
 #   SKIP_ARTIFACTS_CREDPROVIDER - Skip installing Microsoft's artifacts-credprovider (default: false)
+#   SKIP_XDG_OPEN               - Skip installing xdg-open (default: false)
 #   SKIP_ENV_CONFIG             - Skip configuring NUGET_PLUGIN_PATHS (default: false)
 #   GITHUB_REPO                 - GitHub repo for downloads (default: asidlo/devcontainer-credprovider)
 
 set -e
+
+# Parse command-line flags
+USER_INSTALL=false
+for arg in "$@"; do
+  case "$arg" in
+    --user)
+      USER_INSTALL=true
+      ;;
+  esac
+done
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,9 +40,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)" || REPO_ROOT="$SCRIPT_DIR"
 SOURCE="${SOURCE:-local}"
 RUN_TESTS="${RUN_TESTS:-false}"
 GITHUB_REPO="${GITHUB_REPO:-asidlo/devcontainer-credprovider}"
-PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-/usr/local/share/nuget/plugins/custom}"
+
+# Set install paths based on --user flag
+if [ "$USER_INSTALL" = "true" ]; then
+  # User install: NuGet auto-discovers plugins at ~/.nuget/plugins/netcore/<PluginName>/
+  PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-$HOME/.nuget/plugins/netcore}"
+  AZURE_PLUGIN_DIR="$HOME/.nuget/plugins/netcore"
+else
+  # System install: requires NUGET_PLUGIN_PATHS env var
+  PLUGIN_BASE_DIR="${PLUGIN_INSTALL_DIR:-/usr/local/share/nuget/plugins/custom}"
+  AZURE_PLUGIN_DIR="/usr/local/share/nuget/plugins/azure"
+fi
 PLUGIN_INSTALL_DIR="$PLUGIN_BASE_DIR/CredentialProvider.Devcontainer"
-AZURE_PLUGIN_DIR="/usr/local/share/nuget/plugins/azure"
 
 # Temporary directory for downloads/builds
 WORK_DIR=$(mktemp -d)
@@ -36,6 +60,11 @@ trap "rm -rf $WORK_DIR" EXIT
 echo "=== Devcontainer Credential Provider - Install ==="
 echo ""
 echo "Source: $SOURCE"
+if [ "$USER_INSTALL" = "true" ]; then
+  echo "Mode: User install (NuGet auto-discovers, no env vars needed)"
+else
+  echo "Mode: System install (requires NUGET_PLUGIN_PATHS)"
+fi
 echo "Install directory: $PLUGIN_INSTALL_DIR"
 echo ""
 
@@ -224,10 +253,139 @@ else
   echo "3. Skipping Microsoft artifacts-credprovider (SKIP_ARTIFACTS_CREDPROVIDER=true)"
 fi
 
-# Configure NUGET_PLUGIN_PATHS (note: plural with 'S' is required by NuGet)
-if [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
+# Install xdg-open for browser-based authentication flows
+# Microsoft's artifacts-credprovider uses xdg-open to launch the browser for device code flow
+if [ "${SKIP_XDG_OPEN:-false}" != "true" ]; then
   echo ""
-  echo "4. Configuring environment..."
+  echo "4. Installing xdg-open..."
+
+  XDG_OPEN_SHIM_CONTENT='#!/bin/bash
+# Shim to redirect xdg-open calls to VS Code'"'"'s browser helper
+if [ -n "$BROWSER" ]; then
+    exec "$BROWSER" "$@"
+else
+    echo "No BROWSER set, cannot open: $1" >&2
+    exit 1
+fi'
+
+  install_xdg_open_shim() {
+      echo "$XDG_OPEN_SHIM_CONTENT" > /usr/local/bin/xdg-open
+      chmod 755 /usr/local/bin/xdg-open
+      echo "   ✓ Installed xdg-open shim to /usr/local/bin/xdg-open"
+  }
+
+  # Check if already available
+  if command -v xdg-open &>/dev/null; then
+      echo "   ✓ xdg-open already available at $(command -v xdg-open)"
+  else
+      # Detect OS from /etc/os-release
+      if [ -f /etc/os-release ]; then
+          . /etc/os-release
+          OS_ID="${ID:-unknown}"
+          OS_ID_LIKE="${ID_LIKE:-}"
+      else
+          OS_ID="unknown"
+          OS_ID_LIKE=""
+      fi
+
+      case "$OS_ID" in
+          debian|ubuntu|linuxmint|pop|elementary|zorin|kali|raspbian)
+              if apt-get update -qq && apt-get install -y -qq xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via apt-get"
+              else
+                  echo "   ⚠ apt-get install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          mariner|azurelinux|cbl-mariner)
+              # Azure Linux/Mariner - xdg-utils not available in repos
+              echo "   ⚠ xdg-utils not available on Azure Linux/Mariner, installing shim..."
+              install_xdg_open_shim
+              ;;
+          fedora|rhel|centos|rocky|alma|ol)
+              if dnf install -y -q xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via dnf"
+              else
+                  echo "   ⚠ dnf install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          alpine)
+              if apk add --no-cache -q xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via apk"
+              else
+                  echo "   ⚠ apk install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          arch|manjaro|endeavouros)
+              if pacman -S --noconfirm xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via pacman"
+              else
+                  echo "   ⚠ pacman install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          opensuse*|sles)
+              if zypper install -y -q xdg-utils 2>/dev/null; then
+                  echo "   ✓ Installed xdg-open via zypper"
+              else
+                  echo "   ⚠ zypper install failed, installing shim..."
+                  install_xdg_open_shim
+              fi
+              ;;
+          *)
+              # Check ID_LIKE for derivative distros
+              case "$OS_ID_LIKE" in
+                  *debian*|*ubuntu*)
+                      if apt-get update -qq && apt-get install -y -qq xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via apt-get"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *fedora*|*rhel*)
+                      if dnf install -y -q xdg-utils 2>/dev/null || yum install -y -q xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via dnf/yum"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *suse*)
+                      if zypper install -y -q xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via zypper"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *arch*)
+                      if pacman -S --noconfirm xdg-utils 2>/dev/null; then
+                          echo "   ✓ Installed xdg-open via pacman"
+                      else
+                          install_xdg_open_shim
+                      fi
+                      ;;
+                  *)
+                      echo "   ⚠ Unknown OS ($OS_ID), installing xdg-open shim..."
+                      install_xdg_open_shim
+                      ;;
+              esac
+              ;;
+      esac
+  fi
+else
+  echo ""
+  echo "4. Skipping xdg-open installation (SKIP_XDG_OPEN=true)"
+fi
+
+# Configure NUGET_PLUGIN_PATHS (note: plural with 'S' is required by NuGet)
+# User installs skip this - NuGet auto-discovers plugins at ~/.nuget/plugins/netcore/
+if [ "$USER_INSTALL" = "true" ]; then
+  echo ""
+  echo "5. Skipping environment config (user install - NuGet auto-discovers ~/.nuget/plugins/netcore/)"
+elif [ "${SKIP_ENV_CONFIG:-false}" != "true" ]; then
+  echo ""
+  echo "5. Configuring environment..."
   
   # Build plugin paths - must point to the actual plugin DLL, semicolon-separated (even on Linux)
   DEVCONTAINER_PLUGIN_DLL="$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll"
@@ -285,13 +443,13 @@ ENVSCRIPT
   fi
 else
   echo ""
-  echo "4. Skipping environment config (SKIP_ENV_CONFIG=true)"
+  echo "5. Skipping environment config (SKIP_ENV_CONFIG=true)"
 fi
 
 # Run tests if requested
 if [ "$RUN_TESTS" = "true" ]; then
   echo ""
-  echo "5. Running verification tests..."
+  echo "6. Running verification tests..."
   
   # Test that plugin exists
   if [ -f "$PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll" ]; then
@@ -325,8 +483,20 @@ fi
 echo ""
 echo "=== Installation Complete ==="
 echo ""
-echo "Plugin locations:"
-echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
-echo "  Azure (device code flow): $AZURE_PLUGIN_DIR"
+if [ "$USER_INSTALL" = "true" ]; then
+  echo "Install mode: User (NuGet auto-discovers - no env vars needed)"
+  echo ""
+  echo "Plugin locations:"
+  echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
+  if [ "${SKIP_ARTIFACTS_CREDPROVIDER:-false}" != "true" ] && [ -d "$AZURE_PLUGIN_DIR/CredentialProvider.Microsoft" ]; then
+    echo "  Azure (device code flow): $AZURE_PLUGIN_DIR/CredentialProvider.Microsoft"
+  fi
+else
+  echo "Install mode: System (uses NUGET_PLUGIN_PATHS)"
+  echo ""
+  echo "Plugin locations:"
+  echo "  Custom (auth helper):     $PLUGIN_INSTALL_DIR"
+  echo "  Azure (device code flow): $AZURE_PLUGIN_DIR"
+fi
 echo ""
 echo "To verify: dotnet $PLUGIN_INSTALL_DIR/CredentialProvider.Devcontainer.dll --version"

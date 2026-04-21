@@ -15,6 +15,7 @@ public class PluginConfig
 
     public bool Disabled { get; set; }
     public string Verbosity { get; set; } = "normal";
+    public bool UseAzureIdentity { get; set; } = true;
 
     /// <summary>
     /// Config file path: ~/.config/devcontainer-credprovider/config.json
@@ -89,6 +90,13 @@ public class PluginConfig
         if (!string.IsNullOrEmpty(verbosityEnv))
         {
             config.Verbosity = verbosityEnv.ToLowerInvariant();
+        }
+
+        var useAzureIdentityEnv = Environment.GetEnvironmentVariable("DEVCONTAINER_CREDPROVIDER_USE_AZURE_IDENTITY");
+        if (!string.IsNullOrEmpty(useAzureIdentityEnv))
+        {
+            config.UseAzureIdentity = !useAzureIdentityEnv.Equals("false", StringComparison.OrdinalIgnoreCase) &&
+                                       !useAzureIdentityEnv.Equals("0", StringComparison.OrdinalIgnoreCase);
         }
 
         return config;

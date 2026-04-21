@@ -163,8 +163,9 @@ echo ""
 echo -e "${YELLOW}Fetching latest tags...${NC}"
 git fetch --tags --quiet
 
-# Get current version from latest tag
-LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+# Get current version from latest tag (across all refs, not just HEAD ancestors)
+LATEST_TAG=$(git tag --sort=-v:refname | head -1 || echo "v0.0.0")
+LATEST_TAG=${LATEST_TAG:-v0.0.0}
 CURRENT_VERSION="${LATEST_TAG#v}"
 
 echo -e "Current version: ${GREEN}$LATEST_TAG${NC}"
