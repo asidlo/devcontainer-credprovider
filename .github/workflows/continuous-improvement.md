@@ -22,6 +22,8 @@ strict: true
 timeout-minutes: 25
 engine:
   id: copilot
+  model: claude-opus-4.8
+  agent: anvil
   max-turns: 40
 network:
   allowed: [defaults, github]
