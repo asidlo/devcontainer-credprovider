@@ -34,7 +34,9 @@ tools:
     - "dotnet *"
     - "./scripts/*"
 checkout:
-  fetch-depth: 1
+  # Full history so the agent can perform hotspot / churn analysis (git log,
+  # frequently-changed files, co-change patterns) rather than a shallow clone.
+  fetch-depth: 0
 safe-outputs:
   create-issue:
     title-prefix: "[continuous-improvement] "
