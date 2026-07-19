@@ -12,7 +12,7 @@ on:
         required: false
         type: string
   schedule:
-    # Safety net: run once a day on weekdays in case a push event was missed.
+    # Safety net: run once a day on weekdays at 06:00 UTC in case a push event was missed.
     - cron: "0 6 * * 1-5"
 permissions:
   contents: read

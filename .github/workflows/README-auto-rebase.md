@@ -29,8 +29,10 @@ build/tests to validate, and comments on each PR describing what it did.
    [install script](https://github.com/github/gh-aw#quick-start)).
 2. Configure the AI engine. This workflow uses `engine: copilot`, which needs
    `copilot-requests: write` (already set) with centralized Copilot billing, **or** a
-   `COPILOT_GITHUB_TOKEN` secret. To use a different engine (Claude/Codex/Gemini), change the
-   `engine:` block and add the corresponding API-key secret.
+   `COPILOT_GITHUB_TOKEN` secret. To use a different engine, change the `engine:` block and add
+   the corresponding API-key secret: `ANTHROPIC_API_KEY` (Claude), `OPENAI_API_KEY` (Codex), or
+   `GEMINI_API_KEY` (Gemini). See the
+   [engine configuration docs](https://github.com/github/gh-aw/blob/main/docs/src/content/docs/setup/quick-start.mdx).
 3. Recompile after any frontmatter change: `gh aw compile auto-rebase-prs`.
 
 ## Testing iteratively
