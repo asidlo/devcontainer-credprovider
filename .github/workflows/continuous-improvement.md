@@ -110,16 +110,16 @@ Consider these categories (this list is illustrative, not exhaustive). If the ma
 ## Decide what to produce
 
 - **If you found one or more worthwhile improvements:** handle each finding independently. For
-  **every** finding worth addressing (up to the per-run cap):
+  **every** finding worth addressing (up to **5** per run — the safe-output cap for issues and PRs):
   1. Open **one tracking issue** that clearly describes the finding: which theme it belongs to,
      where it is (files/areas), why it matters, and the proposed change. Keep each issue focused on
      a single finding.
   2. **Always** also open **one pull request** that implements that finding — regardless of how
-     large or risky the change seems. These PRs are auto-merged into the repository, so a human in
-     the loop reviews every change and will catch problems or iterate as needed; opening the PR is
-     what puts the change in front of them. Reference the tracking issue from the PR description
-     (e.g. `Refs #<issue>`). Keep the diff minimal and surgical — change only what the improvement
-     requires, and follow the existing code style.
+     large or risky the change seems. These PRs are opened as drafts and flow into the repository's
+     review-and-merge process, so a human in the loop reviews every change and will catch problems
+     or iterate as needed; opening the PR is what puts the change in front of them. Reference the
+     tracking issue from the PR description (e.g. `Refs #<issue>`). Keep the diff minimal and
+     surgical — change only what the improvement requires, and follow the existing code style.
   3. If a change is too large, risky, or ambiguous to implement confidently, still open the PR, but
      say so plainly in the PR description (call out the risk, what you were unsure about, and what a
      reviewer should double-check). Do **not** silently drop the PR or downgrade to an issue-only
