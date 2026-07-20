@@ -1,0 +1,169 @@
+# Continuous Improvement — Dispatch
+#
+# Plain GitHub Actions workflow (NOT a gh-aw agentic workflow). It runs no AI: it
+# just sweeps open `continuous-improvement` tracking issues (created by the
+# "Continuous Improvement — Research" workflow) and fans each one out to the
+# "Continuous Improvement — Implement" gh-aw workflow via workflow_dispatch.
+#
+# Why a cron dispatcher instead of an `issues: labeled` trigger: issues opened by a
+# gh-aw run are authored by GITHUB_TOKEN/github-actions[bot], and bot-authored events
+# do NOT cascade into new workflow runs — EXCEPT workflow_dispatch/repository_dispatch
+# (which do) and schedule (which fires unconditionally). So a scheduled sweep that
+# calls createWorkflowDispatch is what reliably kicks off implementation with zero PATs.
+#
+# State model:
+#   success  = the issue has a linked PR (Implement adds `Fixes #N`) -> skip forever.
+#   failure  = no PR after an attempt -> retry next sweep (attempts tracked via
+#              `ci-attempt-N` labels), up to 3, then label `ci-exhausted` and give up.
+#   decline  = a human adds `ci-wontfix` -> terminal, never dispatched.
+# The 6h sweep interval is >> the 60m Implement timeout, so a prior attempt has always
+# finished by the next sweep (covers graceful hand-backs AND hard crashes).
+
+name: Continuous Improvement — Dispatch
+
+on:
+  schedule:
+    # Every 6 hours: sweep open continuous-improvement issues and dispatch implementers.
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: write
+
+concurrency:
+  group: continuous-improvement-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sweep issues and dispatch implementers
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const TRACK_LABEL = 'continuous-improvement';
+            const MAX_ATTEMPTS = 3;
+            const DISPATCH_CAP = 2;
+            const IMPLEMENT_WORKFLOW = 'continuous-improvement-implement.lock.yml';
+
+            // --- Step 0: ensure management labels exist (idempotent) ---
+            const manageLabels = [
+              { name: 'ci-attempt-1', color: 'c5def5', description: 'Continuous improvement: implement attempt 1 dispatched' },
+              { name: 'ci-attempt-2', color: 'c5def5', description: 'Continuous improvement: implement attempt 2 dispatched' },
+              { name: 'ci-attempt-3', color: 'c5def5', description: 'Continuous improvement: implement attempt 3 dispatched' },
+              { name: 'ci-exhausted', color: 'b60205', description: 'Continuous improvement: gave up after max implement attempts' },
+              { name: 'ci-wontfix', color: 'ededed', description: 'Continuous improvement: deliberately declined; do not implement or re-file' },
+            ];
+            for (const l of manageLabels) {
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name: l.name, color: l.color, description: l.description });
+                core.info(`Created label ${l.name}`);
+              } catch (e) {
+                if (e.status === 422) { core.info(`Label ${l.name} already exists`); }
+                else { throw e; }
+              }
+            }
+
+            // --- Resolve the default branch (workflow_dispatch must target it) ---
+            const repoInfo = await github.rest.repos.get({ owner, repo });
+            const defaultBranch = repoInfo.data.default_branch;
+
+            // --- List open tracking issues (exclude PRs) ---
+            const all = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: TRACK_LABEL, per_page: 100,
+            });
+            const openIssues = all.filter(i => !i.pull_request).sort((a, b) => a.number - b.number);
+            core.info(`Found ${openIssues.length} open ${TRACK_LABEL} issue(s)`);
+
+            // An issue is "done" once a PR references it (Implement writes `Fixes #N`).
+            const linkedPrQuery = `
+              query($owner:String!, $repo:String!, $number:Int!) {
+                repository(owner:$owner, name:$repo) {
+                  issue(number:$number) {
+                    closedByPullRequestsReferences(first:10, includeClosedPrs:true) { totalCount }
+                    timelineItems(first:100, itemTypes:[CROSS_REFERENCED_EVENT, CONNECTED_EVENT]) {
+                      nodes {
+                        __typename
+                        ... on CrossReferencedEvent { willCloseTarget source { __typename ... on PullRequest { number } } }
+                        ... on ConnectedEvent { subject { __typename ... on PullRequest { number } } }
+                      }
+                    }
+                  }
+                }
+              }`;
+
+            async function hasLinkedPr(number) {
+              const data = await github.graphql(linkedPrQuery, { owner, repo, number });
+              const issue = data.repository.issue;
+              // Authoritative: a PR that closes this issue via a keyword (our `Fixes #N`).
+              if (issue.closedByPullRequestsReferences.totalCount > 0) return true;
+              for (const node of issue.timelineItems.nodes) {
+                // A human manually linked a PR via the "Development" panel — deliberate.
+                if (node.__typename === 'ConnectedEvent'
+                    && node.subject && node.subject.__typename === 'PullRequest') return true;
+                // A cross-reference that actually *closes* this issue — not a bare mention
+                // like "related to #N", which must NOT permanently starve the issue.
+                if (node.__typename === 'CrossReferencedEvent' && node.willCloseTarget
+                    && node.source && node.source.__typename === 'PullRequest') return true;
+              }
+              return false;
+            }
+
+            let dispatched = 0;
+            for (const issue of openIssues) {
+              if (dispatched >= DISPATCH_CAP) {
+                core.info(`Dispatch cap (${DISPATCH_CAP}) reached; remaining issues wait for the next sweep.`);
+                break;
+              }
+              const n = issue.number;
+              const labels = issue.labels.map(l => (typeof l === 'string' ? l : l.name));
+
+              if (labels.includes('ci-wontfix') || labels.includes('ci-exhausted')) {
+                core.info(`#${n}: skip (ci-wontfix/ci-exhausted)`);
+                continue;
+              }
+              if (await hasLinkedPr(n)) {
+                core.info(`#${n}: skip (already has a linked PR)`);
+                continue;
+              }
+
+              // Attempts = highest ci-attempt-N label already on the issue.
+              const attempts = labels.reduce((max, l) => {
+                const m = /^ci-attempt-(\d+)$/.exec(l);
+                return m ? Math.max(max, parseInt(m[1], 10)) : max;
+              }, 0);
+
+              if (attempts >= MAX_ATTEMPTS) {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: n, labels: ['ci-exhausted'] });
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: n,
+                  body: `🛑 **Continuous improvement gave up on this issue.**\n\nThe implement workflow was dispatched ${MAX_ATTEMPTS} times without producing a pull request, so I'm labeling it \`ci-exhausted\` and will not retry it automatically. A human can take it from here, or add \`ci-wontfix\` to decline it.`,
+                });
+                core.info(`#${n}: exhausted after ${attempts} attempts`);
+                continue;
+              }
+
+              const nextAttempt = attempts + 1;
+              await github.rest.actions.createWorkflowDispatch({
+                owner, repo,
+                workflow_id: IMPLEMENT_WORKFLOW,
+                ref: defaultBranch,
+                inputs: { issue_number: String(n) },
+              });
+              await github.rest.issues.addLabels({ owner, repo, issue_number: n, labels: [`ci-attempt-${nextAttempt}`] });
+              if (attempts >= 1) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: n,
+                  body: `🔁 Re-dispatching the implement workflow (attempt ${nextAttempt} of ${MAX_ATTEMPTS}). The previous attempt did not produce a pull request.`,
+                });
+              }
+              dispatched++;
+              core.info(`#${n}: dispatched implement (attempt ${nextAttempt})`);
+            }
+
+            core.info(`Done. Dispatched ${dispatched} implement run(s).`);
