@@ -22,6 +22,9 @@ strict: true
 timeout-minutes: 25
 engine:
   id: copilot
+  # Opus 4.8 at high reasoning effort (the same tier the Implement agent runs on) so the
+  # research and duplicate-detection judgment is as strong as the downstream implementer's.
+  model: opusplan
   max-turns: 40
 network:
   allowed: [defaults, github]
@@ -33,6 +36,10 @@ tools:
     - "git *"
     - "dotnet *"
     - "./scripts/*"
+    # Read-only GitHub CLI access so the agent can list existing issues/PRs for duplicate
+    # detection. Permissions below are read-only, so these commands cannot mutate anything.
+    - "gh issue list*"
+    - "gh pr list*"
 checkout:
   # Full history so the agent can perform hotspot / churn analysis (git log,
   # frequently-changed files, co-change patterns) rather than a shallow clone.
@@ -67,21 +74,40 @@ valuable findings. Never invent busywork, and never open low-value or speculativ
 have something to show. But when a finding *is* worthwhile, don't hold back to a single one — open
 one issue for each such finding (up to the per-run cap below).
 
-## Avoid duplicate work
+## Avoid duplicate work (mandatory first step)
 
-Before opening anything, make sure you are not re-filing work that already exists or was already
-declined:
+Re-filing a finding that is already tracked is the single most common failure mode for this
+workflow, so **before you investigate anything, list what already exists** and treat this as a hard
+gate — not a suggestion.
 
-1. List the currently **open** issues labeled `continuous-improvement` (use `gh`), and read their
-   titles/bodies. Skip any finding that is already tracked by such an issue.
-2. List the currently **open** pull requests labeled `continuous-improvement`. Skip any finding
-   that an open PR is already addressing.
-3. Skip findings that match an issue **closed within the last 30 days**, or any issue labeled
-   `ci-wontfix` — those represent work that was already done or deliberately declined. Do not
-   reopen that decision; move on to other findings.
+1. Run these exact commands and read the **full** JSON result. Do **not** pipe them through `head`
+   and do **not** suppress errors with `2>/dev/null`: you need every row, and you need to see any
+   failure rather than mistake it for an empty list. The `--limit 1000` is deliberately high so the
+   listing captures the **entire** `continuous-improvement` history (`gh` paginates internally up to
+   the limit); this workflow can file several issues per day, so a low limit would let older items
+   fall outside the window and reappear as duplicates.
 
-When in doubt about whether a finding is already covered, err on the side of **not** filing a
-duplicate.
+   ```
+   gh issue list --state all --label continuous-improvement --limit 1000 --json number,title,state,body,closedAt,labels
+   gh pr list --state open --label continuous-improvement --limit 1000 --json number,title,body
+   ```
+
+2. If either command errors, retry it **once**. If it still fails — or you otherwise cannot retrieve
+   the lists — **stop and open no issues this run**: call the `noop` tool explaining that
+   duplicate-detection was unavailable. Never treat an empty or failed listing as "there are no
+   existing issues"; that silent failure is exactly what produces duplicates.
+
+3. From the results, build the set of areas that are **already covered** and therefore off-limits:
+   - every **open** `continuous-improvement` issue,
+   - every **open** `continuous-improvement` pull request,
+   - every issue **closed within the last 30 days**, and
+   - every issue labeled `ci-wontfix` (whenever it closed) — a deliberate human decline you must not
+     reopen.
+
+4. For **each** candidate finding, drop it if it targets the **same file, function, or area** and
+   the **same theme** as anything in that set — even when the wording is completely different. Match
+   on the underlying change you would make, not on the title text. When in doubt about whether a
+   finding is already covered, **do not file it.**
 
 ## Improvement themes to investigate
 
