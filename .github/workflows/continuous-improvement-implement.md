@@ -1,7 +1,7 @@
 ---
 emoji: 🛠️
 name: Continuous Improvement — Implement
-description: Implements a single continuous-improvement tracking issue by running the repository's anvil agent (Opus, high reasoning effort) to produce one focused draft pull request. Dispatched per-issue by the Continuous Improvement — Dispatch workflow.
+description: Implements a single continuous-improvement tracking issue by running the repository's anvil agent (Opus 4.8) to produce one focused draft pull request. Dispatched per-issue by the Continuous Improvement — Dispatch workflow.
 on:
   workflow_dispatch:
     inputs:
@@ -20,7 +20,7 @@ timeout-minutes: 60
 engine:
   id: copilot
   agent: anvil
-  model: opusplan
+  model: claude-opus-4.8
   max-turns: 80
 network:
   allowed: [defaults, github]

@@ -22,9 +22,9 @@ strict: true
 timeout-minutes: 25
 engine:
   id: copilot
-  # Opus 4.8 at high reasoning effort (the same tier the Implement agent runs on) so the
+  # Opus 4.8 (the same tier the Implement agent runs on) so the
   # research and duplicate-detection judgment is as strong as the downstream implementer's.
-  model: opusplan
+  model: claude-opus-4.8
   max-turns: 40
 network:
   allowed: [defaults, github]
