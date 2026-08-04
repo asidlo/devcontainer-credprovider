@@ -49,3 +49,6 @@ Thumbs.db
 coverage/
 TestResults/
 TestCoverage/
+
+# Transient checkout created by gh-aw validation tooling
+.tmp-gh-aw-actions/
