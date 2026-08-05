@@ -8,6 +8,9 @@ name: Dependabot auto-merge
 #   - "Allow auto-merge" must be enabled (Settings > General > Pull Requests).
 #   - Branch protection on "main" should require the build check to pass so
 #     that auto-merge waits for a successful build before merging.
+#   - If branch protection requires an approving review, enable "Allow GitHub
+#     Actions to create and approve pull requests" (Settings > Actions >
+#     General) so the approval step below can satisfy that requirement.
 on: pull_request
 
 # Dependabot-triggered runs get a read-only token by default; grant the write
