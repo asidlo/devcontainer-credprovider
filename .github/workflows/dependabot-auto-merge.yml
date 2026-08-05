@@ -1,0 +1,47 @@
+name: Dependabot auto-merge
+
+# Automatically enable auto-merge for Dependabot pull requests. GitHub will
+# only complete the merge once all required status checks (e.g. the "build"
+# job in build.yml) pass, so nothing is merged unless the build is green.
+#
+# Prerequisites (configured in repository settings, not here):
+#   - "Allow auto-merge" must be enabled (Settings > General > Pull Requests).
+#   - Branch protection on "main" should require the build check to pass so
+#     that auto-merge waits for a successful build before merging.
+#   - If branch protection requires an approving review, enable "Allow GitHub
+#     Actions to create and approve pull requests" (Settings > Actions >
+#     General) so the approval step below can satisfy that requirement.
+on: pull_request
+
+# Dependabot-triggered runs get a read-only token by default; grant the write
+# scopes needed to approve and enable auto-merge on the pull request.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-auto-merge:
+    runs-on: ubuntu-latest
+    # Only act on pull requests opened by Dependabot in this repository
+    # (the repository guard prevents the workflow from running in forks).
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.repository == 'asidlo/devcontainer-credprovider'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Approve the pull request
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
