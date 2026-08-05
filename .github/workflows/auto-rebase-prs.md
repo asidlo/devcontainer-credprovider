@@ -43,6 +43,13 @@ safe-outputs:
     target: "*"
     if-no-changes: "ignore"
     fallback-as-pull-request: false
+    # Open PRs in this repo (dependabot GitHub Actions bumps, agentic workflow updates)
+    # legitimately modify files under .github/. Exclude that directory from protected-file
+    # blocking so the merge of `main` can be pushed back to those PR branches. Package
+    # manifests, agent instruction files, and top-level docs stay protected (default policy).
+    protected-files:
+      exclude:
+        - .github/
   add-comment:
     target: "*"
     max: 20
