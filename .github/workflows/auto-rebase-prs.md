@@ -62,15 +62,32 @@ resolving merge conflicts when they occur, and to clearly report what you did.
 ## Scope and selection
 
 1. Determine the latest commit SHA of `main`.
-2. List the currently **open** pull requests that target `main` using `gh`.
+2. List the currently **open** pull requests using `gh`. Run this **exact** command and read the
+   **full** JSON result — do **not** pipe it through `head` and do **not** suppress errors with
+   `2>/dev/null`: you need every row, and you need to see any failure rather than mistake it for an
+   empty list.
+
+   ```
+   gh pr list --state open --limit 1000 --json number,title,isDraft,headRefName,headRepository,isCrossRepository,baseRefName,labels,updatedAt
+   ```
+
+   - Use these **exact** `--json` field names. In particular the draft flag is `isDraft` and the
+     base branch is `baseRefName` — there is **no** `draft` or `base` JSON field. Requesting an
+     unknown field makes `gh` exit with an error, which (if its output were suppressed) would look
+     like an empty list and cause the workflow to silently skip every PR.
+   - From the result, keep only PRs whose `baseRefName` is `main`.
+   - If the command errors, retry it **once**. If it still fails — or you otherwise cannot retrieve
+     the list — **stop and do nothing this run**, reporting that PR discovery was unavailable. Never
+     treat an errored or empty listing as an authoritative "there are no open PRs to rebase"; that
+     silent failure is exactly what leaves open PRs behind `main`.
    - If the manual `pr_number` input (`${{ inputs.pr_number }}`) is provided and non-empty,
      process **only** that single PR and ignore all others.
 3. **Skip** a PR (do nothing to it) when any of the following is true:
-   - It is a **draft** PR.
-   - It comes from a **fork** (its head repository is not this repository). Branch pushes to
-     forks are not possible from this workflow, so instead post a short comment explaining
-     that the branch is behind `main` and must be updated manually by the author — but only
-     if it is actually behind `main`.
+   - It is a **draft** PR (`isDraft` is true).
+   - It comes from a **fork** (`isCrossRepository` is true — its head repository is not this
+     repository). Branch pushes to forks are not possible from this workflow, so instead post a
+     short comment explaining that the branch is behind `main` and must be updated manually by the
+     author — but only if it is actually behind `main`.
    - It has the label `no-auto-rebase`.
    - Its head branch is already **up to date** with `main` (i.e. `main` is fully contained in
      the PR branch — there is nothing to rebase).
