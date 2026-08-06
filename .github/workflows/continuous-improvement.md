@@ -22,9 +22,9 @@ strict: true
 timeout-minutes: 25
 engine:
   id: copilot
-  # Opus 4.8 at high reasoning effort (the same tier the Implement agent runs on) so the
-  # research and duplicate-detection judgment is as strong as the downstream implementer's.
-  model: opusplan
+  # Uses the Copilot engine's default model. Do not set a Claude-Code model alias such as
+  # `opusplan` here — it is not a valid model for the copilot engine and fails at runtime with
+  # "model 'opusplan' is retired or unsupported".
   max-turns: 40
 network:
   allowed: [defaults, github]

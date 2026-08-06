@@ -1,7 +1,7 @@
 ---
 emoji: 🛠️
 name: Continuous Improvement — Implement
-description: Implements a single continuous-improvement tracking issue by running the repository's anvil agent (Opus, high reasoning effort) to produce one focused draft pull request. Dispatched per-issue by the Continuous Improvement — Dispatch workflow.
+description: Implements a single continuous-improvement tracking issue by running the repository's anvil agent to produce one focused draft pull request. Dispatched per-issue by the Continuous Improvement — Dispatch workflow.
 on:
   workflow_dispatch:
     inputs:
@@ -20,7 +20,9 @@ timeout-minutes: 60
 engine:
   id: copilot
   agent: anvil
-  model: opusplan
+  # Uses the Copilot engine's default model. Do not set a Claude-Code model alias such as
+  # `opusplan` here — it is not a valid model for the copilot engine and fails at runtime with
+  # "model 'opusplan' is retired or unsupported".
   max-turns: 80
 network:
   allowed: [defaults, github]
