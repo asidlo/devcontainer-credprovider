@@ -91,9 +91,9 @@ resolving merge conflicts when they occur, and to clearly report what you did.
      process **only** that single PR and ignore all others.
 3. **Skip** a PR (do nothing to it) when any of the following is true:
    - It was opened by **Dependabot** (its `author.login` is `dependabot[bot]`, which may appear as
-     `app/dependabot` in the `gh` JSON). Dependabot keeps its own PRs rebased and they are
-     auto-merged by the `dependabot-auto-merge` workflow once the required build check passes, so
-     this workflow must not touch them.
+     `app/dependabot` in the `gh` JSON). Dependabot rebases its own PRs natively, and the maintainer
+     reviews and merges them manually, so this workflow must not touch them (pushing to a Dependabot
+     branch would conflict with Dependabot's own rebasing).
    - It is a **draft** PR (`isDraft` is true).
    - It comes from a **fork** (`isCrossRepository` is true — its head repository is not this
      repository). Branch pushes to forks are not possible from this workflow, so instead post a
