@@ -75,7 +75,7 @@ resolving merge conflicts when they occur, and to clearly report what you did.
    empty list.
 
    ```
-   gh pr list --state open --limit 1000 --json number,title,isDraft,headRefName,headRepository,isCrossRepository,baseRefName,labels,updatedAt
+   gh pr list --state open --limit 1000 --json number,title,isDraft,headRefName,headRepository,isCrossRepository,baseRefName,labels,updatedAt,author
    ```
 
    - Use these **exact** `--json` field names. In particular the draft flag is `isDraft` and the
@@ -90,6 +90,10 @@ resolving merge conflicts when they occur, and to clearly report what you did.
    - If the manual `pr_number` input (`${{ inputs.pr_number }}`) is provided and non-empty,
      process **only** that single PR and ignore all others.
 3. **Skip** a PR (do nothing to it) when any of the following is true:
+   - It was opened by **Dependabot** (its `author.login` is `dependabot[bot]`, which may appear as
+     `app/dependabot` in the `gh` JSON). Dependabot rebases its own PRs natively, and the maintainer
+     reviews and merges them manually, so this workflow must not touch them (pushing to a Dependabot
+     branch would conflict with Dependabot's own rebasing).
    - It is a **draft** PR (`isDraft` is true).
    - It comes from a **fork** (`isCrossRepository` is true — its head repository is not this
      repository). Branch pushes to forks are not possible from this workflow, so instead post a
@@ -104,6 +108,17 @@ resolving merge conflicts when they occur, and to clearly report what you did.
 ## Updating each qualifying PR
 
 For each PR that is behind `main` and eligible for update:
+
+> **Hard safety gate — workflow files.** This workflow's token cannot push changes under
+> `.github/workflows/` (it lacks the `workflows` permission). Before pushing any PR, inspect the
+> files the merge of `main` brings in — for example run `git diff --name-only HEAD@{1} HEAD`
+> immediately after merging. If **any** path is under `.github/workflows/` (including the compiled
+> `*.lock.yml` files), do **not** push that PR: GitHub would reject the push, and because a failed
+> push **cancels all other safe outputs** (including comments) the run would fail and leave an
+> `[aw]` error issue instead of informing the author. For those PRs, skip the push, add the
+> `needs-manual-rebase` label, and post a comment explaining that `main` advanced a workflow file
+> this automation is not permitted to push, so the author must rebase and push it locally. Decide
+> this **before** attempting any push — never "try the push and see if it works".
 
 1. Check out the PR's head branch locally from `origin` and make sure you have the latest
    `main` fetched.
@@ -136,6 +151,11 @@ For each PR that is behind `main` and eligible for update:
   correct PR. Only push branches you actually modified and validated.
 - Never force-push or rewrite existing PR history — only add the merge of `main`.
 - Never push to a PR that originates from a fork.
+- **Never push a merge that changes any file under `.github/workflows/`** (see the hard safety gate
+  above): comment and label those PRs for manual rebase instead.
+- Because a failed push cancels every other safe output in the same run, decide whether a push is
+  safe **before** calling `push-to-pull-request-branch`. Only push when the merge is clean (or
+  confidently resolved), validated, and free of any `.github/workflows/` changes.
 
 ## Reporting
 
