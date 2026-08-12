@@ -13,6 +13,13 @@
     "ghcr.io/devcontainers/features/azure-cli",
     "ghcr.io/microsoft/codespace-features/artifacts-helper"
   ],
+  "customizations": {
+      "vscode": {
+          "extensions": [
+              "ms-codespaces-tools.ado-codespaces-auth"
+          ]
+      }
+  },
   "containerEnv": {
     "AZCOPY_AUTO_LOGIN_TYPE": "AZCLI",
     "NUGET_CREDENTIALPROVIDER_SESSIONTOKENCACHE_ENABLED": "true",
