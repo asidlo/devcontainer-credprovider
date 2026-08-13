@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace CredentialProvider.Devcontainer.Tests;
@@ -200,6 +201,65 @@ public class InstallationIntegrationTests : IDisposable
         // Assert - The test mode attempts authentication via auth helpers
         // It may succeed (if auth helper is available) or fail (if not)
         Assert.True(result.Output.Length > 0 || result.Error.Length > 0, "Test mode should produce output");
+    }
+
+    [Fact]
+    public async Task Installation_RunInstallScriptTwice_DoesNotDuplicateRcFileBlock()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) &&
+            !RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return; // Skip on non-Unix platforms; rc file config is Unix-only
+        }
+
+        // Arrange
+        var publishDir = Path.Combine(_testHome, "publish");
+        var netcoreDir = Path.Combine(publishDir, "netcore");
+
+        await RunDotnetCommand("publish",
+            $"\"{Path.Combine(_repoRoot, "src", "CredentialProvider.Devcontainer")}\" -c Release -o \"{netcoreDir}\" --nologo");
+
+        var installScript = Path.Combine(_repoRoot, "scripts", "install.sh");
+        if (!File.Exists(installScript))
+        {
+            return; // Skip on platforms without install.sh
+        }
+
+        File.Copy(installScript, Path.Combine(publishDir, "install.sh"));
+
+        // Pre-create an rc file so the "Configure user's shell rc files" loop runs
+        var bashrc = Path.Combine(_testHome, ".bashrc");
+        await File.WriteAllTextAsync(bashrc, "# pre-existing user content\n");
+
+        var pluginBaseDir = Path.Combine(_testHome, "nuget-plugins");
+        Environment.SetEnvironmentVariable("PLUGIN_INSTALL_DIR", pluginBaseDir);
+        Environment.SetEnvironmentVariable("SKIP_ARTIFACTS_CREDPROVIDER", "true");
+
+        try
+        {
+            // Act - run the install script twice, simulating a reinstall
+            var firstRun = await RunBashCommand(Path.Combine(publishDir, "install.sh"), _testHome);
+            var secondRun = await RunBashCommand(Path.Combine(publishDir, "install.sh"), _testHome);
+
+            // Assert
+            var bashrcContent = await File.ReadAllTextAsync(bashrc);
+            var commentBlockCount = bashrcContent.Split('\n')
+                .Count(line => line == "# Devcontainer Credential Provider");
+            var exportLineCount = bashrcContent.Split('\n')
+                .Count(line => line.Contains("NUGET_PLUGIN_PATHS="));
+
+            Assert.True(commentBlockCount == 1,
+                $"Expected exactly one '# Devcontainer Credential Provider' block after running install.sh twice, found {commentBlockCount}. " +
+                $"First run output: {firstRun.Output} {firstRun.Error}. Second run output: {secondRun.Output} {secondRun.Error}. Content: {bashrcContent}");
+            Assert.True(exportLineCount == 1,
+                $"Expected exactly one NUGET_PLUGIN_PATHS export line after running install.sh twice, found {exportLineCount}. Content: {bashrcContent}");
+            Assert.Contains("# pre-existing user content", bashrcContent);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PLUGIN_INSTALL_DIR", null);
+            Environment.SetEnvironmentVariable("SKIP_ARTIFACTS_CREDPROVIDER", null);
+        }
     }
 
     [Fact]

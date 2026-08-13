@@ -426,8 +426,10 @@ ENVSCRIPT
   # Configure user's shell rc files (works without root)
   for rcfile in "$HOME/.bashrc" "$HOME/.zshrc"; do
     if [ -f "$rcfile" ]; then
-      # Remove any existing NUGET_PLUGIN_PATHS line and add fresh
-      grep -v 'NUGET_PLUGIN_PATHS=' "$rcfile" > "$rcfile.tmp" 2>/dev/null || true
+      # Remove any existing "Devcontainer Credential Provider" comment line and
+      # NUGET_PLUGIN_PATHS line (added by a previous run of this script) before
+      # appending a fresh block, so repeated runs don't accumulate duplicates.
+      grep -v -e 'NUGET_PLUGIN_PATHS=' -e '^# Devcontainer Credential Provider$' "$rcfile" > "$rcfile.tmp" 2>/dev/null || true
       echo "" >> "$rcfile.tmp"
       echo "# Devcontainer Credential Provider" >> "$rcfile.tmp"
       echo "export NUGET_PLUGIN_PATHS=\"$DEVCONTAINER_PLUGIN_DLL;$AZURE_PLUGIN_DLL\"" >> "$rcfile.tmp"
