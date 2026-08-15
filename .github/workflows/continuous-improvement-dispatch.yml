@@ -16,15 +16,15 @@
 #   failure  = no PR after an attempt -> retry next sweep (attempts tracked via
 #              `ci-attempt-N` labels), up to 3, then label `ci-exhausted` and give up.
 #   decline  = a human adds `ci-wontfix` -> terminal, never dispatched.
-# The 6h sweep interval is >> the 60m Implement timeout, so a prior attempt has always
+# The daily sweep interval is >> the 60m Implement timeout, so a prior attempt has always
 # finished by the next sweep (covers graceful hand-backs AND hard crashes).
 
 name: Continuous Improvement — Dispatch
 
 on:
   schedule:
-    # Every 6 hours: sweep open continuous-improvement issues and dispatch implementers.
-    - cron: "0 */6 * * *"
+    # Once a day at 09:00 UTC — after the 07:00 Research run has finished creating issues.
+    - cron: "0 9 * * *"
   workflow_dispatch:
 
 permissions:
