@@ -3,7 +3,7 @@
 // See: https://github.com/NuGet/Home/wiki/NuGet-cross-plat-authentication-plugin
 //
 // Authentication chain (in order):
-//   1. Auth helpers (ado-auth-helper, azure-auth-helper) - for devcontainer/codespace environments
+//   1. Auth helpers (ado-auth-helper) - for devcontainer/codespace environments
 //   2. Azure Identity (DefaultAzureCredential) - supports az cli, managed identity, env vars, browser login
 // If all methods fail, returns NotApplicable to allow fallback to other credential providers
 // like Microsoft's artifacts-credprovider.
@@ -30,9 +30,7 @@ public static class Program
     private static readonly string[] AuthHelperPaths =
     [
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "ado-auth-helper"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "azure-auth-helper"),
-        "/usr/local/bin/ado-auth-helper",
-        "/usr/local/bin/azure-auth-helper"
+        "/usr/local/bin/ado-auth-helper"
     ];
 
     /// <summary>
