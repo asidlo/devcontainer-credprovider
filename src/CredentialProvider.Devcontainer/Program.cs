@@ -505,7 +505,6 @@ public static class Program
         }
 
         return uri.Contains("dev.azure.com", StringComparison.OrdinalIgnoreCase) ||
-               uri.Contains("pkgs.dev.azure.com", StringComparison.OrdinalIgnoreCase) ||
                uri.Contains("visualstudio.com", StringComparison.OrdinalIgnoreCase) ||
                uri.Contains("azure.com/_packaging", StringComparison.OrdinalIgnoreCase);
     }
